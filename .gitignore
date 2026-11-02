@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+target/
+dist/
+*.wasm
+.DS_Store
+# submission payload contains personal data, never commit it
+submission.json

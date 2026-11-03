@@ -4,6 +4,8 @@ A private AI treasury for merchants, built at NEAR HACKATHON (Nov 1-14, 2026).
 
 > Status: scaffold. Sections marked TODO are filled in as features land.
 
+
+
 ## What it is
 
 Customers pay a merchant in any token. The payment settles to the merchant treasury as a stablecoin via NEAR Intents. A confidential AI assistant (NEAR AI Cloud, TEE) reads the merchant's sensitive financial data and drafts proposals: vendor payouts and one yield allocation. Signers approve in an M-of-N treasury contract. The AI can propose but cannot approve or hold keys.
@@ -33,10 +35,17 @@ AI proposer (agent/, NEAR AI Cloud TEE) --propose only--------+
 signers (web) --approve/reject-------------------------------+
 ```
 
-- `contracts/treasury`: Rust (near-sdk). M-of-N approvals, restricted proposer role, venue whitelist and per-venue caps.
+- `contracts/treasury`: Rust (near-sdk). M-of-N approvals, restricted proposer role, governance proposals, and a policy-limited yield layer (stablecoin only, cumulative venue caps, reserve floor, pause switch). See `docs/CONTRACT.md`.
 - `web`: Next.js checkout, treasury dashboard and flow view.
 - `agent`: proposer service that calls NEAR AI Cloud and submits proposals.
 - `docs/PLAN.md`: two-week plan.
+
+## Limits (honest about what this does not do)
+
+- `positions` records principal supplied to a venue, not current value. The UI must read live value directly from the venue contract.
+- Floors and caps are in token units (absolute amounts), not percentages. The AI can reason about percentages, but the contract only enforces the numbers set in `SetPolicy` and `SetVenueCap`.
+- Two allocations approved within seconds of each other can both pass the reserve-floor balance check, because each reads the same on-chain balance before either transfer settles.
+- The venue withdraw interface (`withdraw(token_id, amount)`) is our own design. Rhea's real interface is unchecked and would need an adapter. The next step is a mock venue for testnet.
 
 ## What the TEE protects (and what it does not)
 

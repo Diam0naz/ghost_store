@@ -9,3 +9,6 @@ dist/
 .DS_Store
 # submission payload contains personal data, never commit it
 submission.json
+
+# whitelisted example (matches .env.* above)
+!web/.env.local.example

@@ -1,5 +1,5 @@
 {
-  "name": "treasury-web",
+  "name": "ghost-store",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,14 +8,26 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "^15.0.0",
+    "@defuse-protocol/one-click-sdk-typescript": "^0.1.26",
+    "@near-wallet-selector/core": "^10.1.4",
+    "@near-wallet-selector/modal-ui": "^10.1.4",
+    "@near-wallet-selector/my-near-wallet": "^10.1.4",
+    "@tanstack/react-query": "^5.105.2",
+    "near-api-js": "^7.2.0",
+    "next": "^16.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "near-api-js": "^5.0.0"
+    "viem": "^2.57.14",
+    "wagmi": "^3.7.9"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.0.0",
-    "@types/react": "^19.0.0"
+    "@types/react": "^19.0.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.6.0"
+  },
+  "allowScripts": {
+    "secp256k1@5.0.1": true
   }
 }

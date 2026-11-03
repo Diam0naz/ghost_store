@@ -1,1 +1,123 @@
 @import "tailwindcss";
+
+/* Ghost Store brand — purple + very light purple, rounded display font */
+@theme {
+  --font-sans: "Baloo 2", "Nunito", "Quicksand", ui-rounded, system-ui, sans-serif;
+
+  /* Primary purple scale (600 is the brand color) */
+  --color-primary-50: #f6f2ff;
+  --color-primary-100: #ede7ff;
+  --color-primary-200: #dccdff;
+  --color-primary-300: #c2a5ff;
+  --color-primary-400: #a675fb;
+  --color-primary-500: #8b4df5;
+  --color-primary-600: #7a2ff0;
+  --color-primary-700: #6419dd;
+  --color-primary-800: #5414b8;
+  --color-primary-900: #461294;
+  --color-primary-950: #2d0a63;
+
+  /* Soft purple-grays for body text on the light theme */
+  --color-ink-400: #9d8fc4;
+  --color-ink-600: #6b5b95;
+  --color-ink-900: #2f2057;
+
+  --shadow-soft: 0 2px 16px rgb(122 47 240 / 0.08);
+
+  /* Mascot animations (empty-state ghost) */
+  --animate-ghost-float: ghost-float 3.2s ease-in-out infinite;
+  --animate-ghost-blink: ghost-blink 4.6s ease-in-out infinite;
+  --animate-twinkle: twinkle 2.4s ease-in-out infinite;
+  --animate-card-in: card-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ghost-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2.5deg);
+  }
+  50% {
+    transform: translateY(-9px) rotate(2.5deg);
+  }
+}
+
+@keyframes ghost-blink {
+  0%,
+  88%,
+  96%,
+  100% {
+    transform: scaleY(1);
+  }
+  91%,
+  94% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15) rotate(25deg);
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-primary-50);
+    background-image: radial-gradient(
+        60rem 30rem at 85% -10%,
+        var(--color-primary-100),
+        transparent
+      ),
+      radial-gradient(50rem 25rem at 0% 0%, #f3ecff, transparent);
+    background-repeat: no-repeat;
+    color: var(--color-ink-900);
+  }
+
+  ::selection {
+    background: var(--color-primary-200);
+    color: var(--color-primary-950);
+  }
+}
+
+@layer components {
+  /* Standard card treatment used across pages */
+  .card {
+    @apply rounded-2xl border border-primary-100 bg-white shadow-soft animate-card-in;
+  }
+
+  /* Blinking mascot eyes — SVG-safe transform origin */
+  .ghost-eye {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: var(--animate-ghost-blink);
+  }
+
+  .btn-primary {
+    @apply rounded-full bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-ghost {
+    @apply rounded-full border border-primary-200 bg-white px-5 py-2 text-sm font-semibold text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50;
+  }
+}

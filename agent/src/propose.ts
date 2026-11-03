@@ -58,7 +58,14 @@ function isValidKind(kind: unknown): kind is ProposalKind {
 
 // ---- NEAR connection -------------------------------------------------------
 
-async function nearAccount() {
+// Module-level cache: connect() is expensive (HTTP handshake + key derivation).
+// We create the account object once and reuse it for both context reads and submit.
+import type { Account } from "near-api-js";
+let _accountCache: Account | null = null;
+
+async function nearAccount(): Promise<Account> {
+  if (_accountCache) return _accountCache;
+
   const network = process.env.NEAR_NETWORK ?? "testnet";
   const nodeUrl =
     process.env.NEAR_RPC_URL ??
@@ -77,7 +84,8 @@ async function nearAccount() {
   );
 
   const near = await connect({ networkId: network, keyStore, nodeUrl });
-  return near.account(proposerAccountId);
+  _accountCache = await near.account(proposerAccountId);
+  return _accountCache;
 }
 
 // ---- on-chain treasury context ---------------------------------------------

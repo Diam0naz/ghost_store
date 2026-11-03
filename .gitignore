@@ -12,3 +12,4 @@ submission.json
 
 # whitelisted example (matches .env.* above)
 !web/.env.local.example
+.vercel

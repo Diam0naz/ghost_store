@@ -4,12 +4,14 @@
 
 import { setupWalletSelector, type WalletSelector } from "@near-wallet-selector/core";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
-import { setupModal, type WalletSelectorModal } from "@near-wallet-selector/modal-ui";
+import { setupHereWallet } from "@near-wallet-selector/here-wallet";
+import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
+import { setupNightly } from "@near-wallet-selector/nightly";
 import { JsonRpcProvider } from "near-api-js";
-import { actionCreators } from "@near-js/transactions";
+import { actionCreators, type Action } from "@near-js/transactions";
 
-const NETWORK = process.env.NEXT_PUBLIC_NEAR_NETWORK ?? "testnet";
-const RPC_URL =
+export const NETWORK = process.env.NEXT_PUBLIC_NEAR_NETWORK ?? "testnet";
+export const RPC_URL =
   process.env.NEXT_PUBLIC_NEAR_RPC_URL ??
   (NETWORK === "mainnet"
     ? "https://rpc.mainnet.near.org"
@@ -20,11 +22,9 @@ export const TREASURY_CONTRACT_ID =
 
 // Singletons — only initialised in the browser
 let _selector: WalletSelector | null = null;
-let _modal: WalletSelectorModal | null = null;
 
 async function getSelector(): Promise<WalletSelector> {
   if (_selector) return _selector;
-
   _selector = await setupWalletSelector({
     network: NETWORK as "mainnet" | "testnet",
     modules: [
@@ -34,22 +34,64 @@ async function getSelector(): Promise<WalletSelector> {
             ? "https://wallet.near.org"
             : "https://testnet.mynearwallet.com",
       }),
+      setupHereWallet(),
+      setupMeteorWallet(),
+      setupNightly(),
     ],
   });
   return _selector;
 }
 
-function getModal(selector: WalletSelector): WalletSelectorModal {
-  if (!_modal) {
-    _modal = setupModal(selector, { contractId: TREASURY_CONTRACT_ID });
-  }
-  return _modal;
-}
+/** NEAR wallet modules registered with wallet-selector (for the connect UI).
+ * `icon` is the wallet's own mark in /public/wallets; `gradient` + `monogram`
+ * are the fallback tile used if the icon fails to load. */
+export const WALLET_OPTIONS = [
+  {
+    id: "my-near-wallet",
+    name: "MyNearWallet",
+    description: "Web wallet · redirect sign-in",
+    icon: "/wallets/mynear.jpg",
+    gradient: "from-teal-400 to-teal-600",
+    monogram: "MW",
+  },
+  {
+    id: "here-wallet",
+    name: "Here Wallet",
+    description: "Mobile-first NEAR wallet",
+    icon: "/wallets/here.jpg",
+    gradient: "from-lime-400 to-emerald-500",
+    monogram: "H",
+  },
+  {
+    id: "meteor-wallet",
+    name: "Meteor",
+    description: "Browser & mobile wallet",
+    icon: "/wallets/meteor.jpg",
+    gradient: "from-orange-400 to-rose-500",
+    monogram: "M",
+  },
+  {
+    id: "nightly",
+    name: "Nightly",
+    description: "Browser extension",
+    icon: "/wallets/nightly.png",
+    gradient: "from-indigo-500 to-violet-600",
+    monogram: "N",
+  },
+] as const;
 
-/** Opens the wallet-selector sign-in modal. Browser-only. */
-export async function signIn() {
+/** Connect with a specific wallet module. Browser-only. */
+export async function connectWallet(moduleId: string): Promise<void> {
   const selector = await getSelector();
-  getModal(selector).show();
+  const wallet = await selector.wallet(moduleId);
+  // All registered providers are redirect/extension wallets; the `accounts`
+  // field only matters for hardware/bridge wallets and is a no-op here.
+  await wallet.signIn({
+    contractId: TREASURY_CONTRACT_ID,
+    successUrl: window.location.href,
+    failureUrl: window.location.href,
+    accounts: [],
+  });
 }
 
 /** Signs out from the currently active wallet. */
@@ -66,6 +108,25 @@ export async function getAccountId(): Promise<string | null> {
   return state.accounts[0]?.accountId ?? null;
 }
 
+/** Subscribes to account changes; returns an unsubscribe function. Browser-only. */
+export async function subscribeAccountId(
+  cb: (accountId: string | null) => void
+): Promise<() => void> {
+  const selector = await getSelector();
+  const subscription = selector.store.observable.subscribe({
+    next: (state) => cb(state.accounts[0]?.accountId ?? null),
+  });
+  return () => subscription.unsubscribe();
+}
+
+/** utf8-safe JSON → base64 without relying on Node's Buffer (browser-safe). */
+function jsonToBase64(obj: object): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
 /** JSON-RPC view call — no signing needed. */
 export async function viewCall<T>(
   contractId: string,
@@ -77,17 +138,43 @@ export async function viewCall<T>(
     request_type: "call_function",
     account_id: contractId,
     method_name: methodName,
-    args_base64: Buffer.from(JSON.stringify(args)).toString("base64"),
+    args_base64: jsonToBase64(args),
     finality: "optimistic",
   }) as unknown as { result: number[] };
-  return JSON.parse(Buffer.from(rawResult.result).toString()) as T;
+  const bytes = new Uint8Array(rawResult.result);
+  return JSON.parse(new TextDecoder().decode(bytes)) as T;
 }
 
-/** Send a signed function call transaction via the active wallet. */
+/**
+ * Send one or more actions from the active wallet in a single transaction.
+ * Used by checkout deposits (wrap + ft_transfer in one tx).
+ * Returns the transaction hash.
+ */
+export async function sendActions(
+  receiverId: string,
+  actions: Action[]
+): Promise<string> {
+  const selector = await getSelector();
+  const wallet = await selector.wallet();
+  const result = await wallet.signAndSendTransaction({
+    receiverId,
+    actions,
+  });
+  const tx = result as { transaction?: { hash?: string } };
+  if (!tx.transaction?.hash) throw new Error("Transaction returned no hash");
+  return tx.transaction.hash;
+}
+
+/**
+ * Send a signed function call via the active wallet.
+ * gas defaults to 30 Tgas for governance/reject, use "50000000000000" for approve-payout,
+ * "150000000000000" for approve-allocate.
+ */
 export async function callContract(
   methodName: string,
   args: object,
-  attachedDeposit = "0"
+  attachedDeposit = "0",
+  gas = "30000000000000"
 ): Promise<unknown> {
   const selector = await getSelector();
   const wallet = await selector.wallet();
@@ -97,7 +184,7 @@ export async function callContract(
       actionCreators.functionCall(
         methodName,
         args,
-        BigInt("30000000000000"),
+        BigInt(gas),
         BigInt(attachedDeposit)
       ),
     ],

@@ -275,6 +275,10 @@ switch (step) {
       throw new Error("usage: vote <approve|reject> <proposal id> [signer account]");
     }
     const signerId = who ?? SIGNERS[0];
+    const before = await (await account(signerId)).viewFunction({ contractId: VAULT, methodName: "get_proposal", args: { id: Number(idArg) } });
+    if (!before) throw new Error(`proposal #${idArg} does not exist on ${VAULT} (did propose create it?)`);
+    if (before.status !== "Pending") throw new Error(`proposal #${idArg} is ${before.status}, not Pending`);
+    if (before.approvals.includes(signerId) && action === "approve") throw new Error(`${signerId} already approved #${idArg}`);
     const o = await (await account(signerId)).functionCall({
       contractId: VAULT,
       methodName: action,

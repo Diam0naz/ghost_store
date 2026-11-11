@@ -32,6 +32,9 @@ propose_attested(model, request_hash, response, signature) ---------------------
    and with pending proposals; the schema then admits only matched, unpaid invoices and raw payouts
    for bills with no invoice and nothing in flight. An early version left matching to the model,
    which once proposed a raw payout for a bill that had a matching invoice (a double-pay risk).
+   If the model returns an empty list while a reconciled bill is owed and due within 14 days, the
+   agent asks again (up to `MAX_ATTEMPTS`, default 3). Each attempt is a separate signed
+   completion, and only one is ever submitted, unaltered.
 3. It fetches the ECDSA response signature and checks locally that the signed text is
    `model:sha256(request bytes):sha256(response bytes)`.
 4. It calls `propose_attested` with the exact response bytes, the request hash and the signature.

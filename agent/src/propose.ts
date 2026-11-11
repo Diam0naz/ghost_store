@@ -14,7 +14,7 @@
 // `propose_attested`. It can never approve or execute.
 //
 //   npm run propose               # full run
-//   DRY_RUN=true npm run propose  # everything except the on-chain submit
+//   DRY_RUN=1 npm run propose     # everything except the on-chain submit
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -196,12 +196,29 @@ function reconcile(bills: Bill[], ctx: Awaited<ReturnType<typeof treasuryContext
   return { states, unmatched };
 }
 
+let reconciliationLogged = false;
+
+/** Bills the chain says are owed, due within 14 days, with nothing paid or in flight. */
+function owedSoon(requestBody: string): number {
+  const user = JSON.parse(JSON.parse(requestBody).messages[1].content);
+  const horizon = Date.now() + 14 * 86_400_000;
+  return (user.bills_to_settle as { status: string; due: string }[]).filter(
+    (b) => (b.status === "pay_invoice" || b.status === "no_invoice") && Date.parse(b.due) <= horizon
+  ).length;
+}
+
 function buildRequest(model: string, ctx: Awaited<ReturnType<typeof treasuryContext>>, books: unknown): string {
   const stable = ctx.policy.stable_token;
   const bills = ((books as { bills?: Bill[] }).bills ?? []).filter(
     (b) => typeof b.vendor_account === "string" && typeof b.amount === "number"
   );
   const { states, unmatched } = reconcile(bills, ctx);
+  if (!reconciliationLogged) console.log("Reconciliation (bills vs on-chain invoices):");
+  for (const b of reconciliationLogged ? [] : states) {
+    const extra = "invoice_id" in b ? ` invoice #${b.invoice_id}` : "by" in b ? ` (${b.by})` : "";
+    console.log(`  ${b.invoice.padEnd(9)} ${String(b.amount).padStart(7)} USDT  due ${b.due}  ${b.status}${extra}`);
+  }
+  for (const i of reconciliationLogged ? [] : unmatched) console.log(`  unmatched invoice #${i.id} ${i.reference} from ${i.issuer}: will not be paid`);
   // Hard limits on what can be named. Invoices: only ones matched to a bill. Payouts: only to
   // bills with no invoice and no payment in flight. Venues: only whitelisted ones. One invalid
   // draft would make the whole signed batch fail on chain.
@@ -214,22 +231,24 @@ function buildRequest(model: string, ctx: Awaited<ReturnType<typeof treasuryCont
     "Reply with ONLY a JSON array (no prose, no markdown) of at most 5 items shaped {\"kind\": ..., \"rationale\": \"...\"}.",
     `Example item: {"kind":{"PayInvoice":{"invoice_id":3}},"rationale":"Matches bill PKG-2291, due in 2 days"}`,
     "Allowed kinds:",
-    '  {"PayInvoice":{"invoice_id":<id from open_invoices>}}  (pays the invoice holder its exact amount)',
+    '  {"PayInvoice":{"invoice_id":<invoice_id of a bill in bills_to_settle>}}  (pays the invoice holder its exact amount)',
     `  {"Payout":{"to":"<vendor_account>","token":"${stable}","amount":"<integer string>"}}`,
     `  {"Allocate":{"venue":"<whitelisted venue>","token":"${stable}","amount":"<integer string>"}}`,
     '  {"Withdraw":{"venue":"<venue with a position>","amount":"<integer string>"}}',
     "The input gives every figure in whole USDT. In your OUTPUT, amounts are integer strings in the token's smallest unit:",
     `${stable} has 6 decimals, so 40 USDT is "40000000" and 25.5 USDT is "25500000".`,
-    "bills_to_settle lists each bill with a status computed from the chain. For bills due within 14 days:",
+    "bills_to_settle lists each bill with a status computed from the chain. Paying bills on time comes first:",
+    "the payroll buffer in the books limits only yield allocations, never bill payments. The contract's reserve floor protects the minimum balance.",
+    "For bills due within 14 days:",
     "  status pay_invoice: propose PayInvoice with that invoice_id.",
     "  status no_invoice: propose a Payout of exactly the billed amount to its vendor_account.",
     "  status payment_pending or already_paid: propose nothing for it.",
     "Never pay anything in unmatched_invoices: no bill in the books backs them.",
     "Never pay an account that is not a bill's vendor_account.",
     "Only allocate idle cash to a whitelisted venue, and only if the liquid balance after all payouts stays above the reserve floor plus 30 days of payroll.",
-    "If nothing should happen, reply with an empty array [].",
+    "Reply with an empty array [] only if no bill needs paying and no allocation is warranted.",
     "Rationales must be under 300 characters and must NOT contain customer names, emails, revenue figures or other private data from the books.",
-    "Invoice payments from allowlisted vendors within the limits execute automatically after a veto window; everything else waits for signers.",
+    "Autonomy limits never stop you proposing a due bill: invoice payments from allowlisted vendors within the limits execute automatically after a veto window, and every other payment (new suppliers, amounts over the limits) is still proposed and simply waits for signer approval.",
   ].join("\n");
 
   const a = ctx.autonomy.policy;
@@ -358,7 +377,7 @@ async function signatureWithRetry(baseUrl: string, apiKey: string, chatId: strin
 // ---- main ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const dryRun = process.env.DRY_RUN === "true";
+  const dryRun = ["true", "1"].includes(process.env.DRY_RUN ?? "");
   const model = process.env.NEAR_AI_MODEL || DEFAULT_MODEL;
   const baseUrl = getEnv("NEAR_AI_BASE_URL").replace(/\/+$/, "");
   const apiKey = getEnv("NEAR_AI_API_KEY");
@@ -376,105 +395,119 @@ async function main(): Promise<void> {
     console.warn(`TEE report check skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // One completion. Keep the exact bytes: their hash is what the TEE signs.
-  const requestBody = buildRequest(model, ctx, books);
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-    body: requestBody,
-  });
-  const responseBytes = new Uint8Array(await res.arrayBuffer());
-  const responseText = new TextDecoder().decode(responseBytes);
-  if (!res.ok) throw new Error(`Completion failed (HTTP ${res.status}): ${responseText.slice(0, 300)}`);
+  // One completion per attempt. Keep the exact bytes: their hash is what the TEE signs.
+  // Temperature 0 is not deterministic on this server, and [] is schema-valid, so if the model
+  // returns nothing while bills are owed and due, ask again (each attempt is separately signed;
+  // the contract sees only the one we submit, which is still unaltered model output).
+  const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS ?? 3);
+  for (let attempt = 1; ; attempt++) {
+    const requestBody = buildRequest(model, ctx, books);
+    reconciliationLogged = true;
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: requestBody,
+    });
+    const responseBytes = new Uint8Array(await res.arrayBuffer());
+    const responseText = new TextDecoder().decode(responseBytes);
+    if (!res.ok) throw new Error(`Completion failed (HTTP ${res.status}): ${responseText.slice(0, 300)}`);
 
-  const body = JSON.parse(responseText);
-  const content: string | undefined = body?.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Completion has no message content");
-  let drafts: Draft[];
-  try {
-    drafts = parseDrafts(content);
-  } catch (err) {
-    console.error(`Model output:\n${content}`);
-    throw err;
-  }
-  const requestHash = sha256Hex(requestBody);
-  const responseHash = sha256Hex(responseBytes);
+    const body = JSON.parse(responseText);
+    const content: string | undefined = body?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Completion has no message content");
+    let drafts: Draft[];
+    try {
+      drafts = parseDrafts(content);
+    } catch (err) {
+      console.error(`Model output:\n${content}`);
+      throw err;
+    }
+    const requestHash = sha256Hex(requestBody);
+    const responseHash = sha256Hex(responseBytes);
 
-  const sig = await signatureWithRetry(baseUrl, apiKey, String(body.id));
-  const expectedText = `${model}:${requestHash}:${responseHash}`;
-  if (sig.signature_kind !== "provider_tee") throw new Error(`Signature is ${sig.signature_kind}, not provider_tee`);
-  if (sig.text !== expectedText) throw new Error(`Signed text mismatch:\n  got      ${sig.text}\n  expected ${expectedText}`);
-  const signer = sig.signing_address.toLowerCase();
-  console.log(`TEE signature by ${signer} over response ${responseHash.slice(0, 16)}…`);
+    const sig = await signatureWithRetry(baseUrl, apiKey, String(body.id));
+    const expectedText = `${model}:${requestHash}:${responseHash}`;
+    if (sig.signature_kind !== "provider_tee") throw new Error(`Signature is ${sig.signature_kind}, not provider_tee`);
+    if (sig.text !== expectedText) throw new Error(`Signed text mismatch:\n  got      ${sig.text}\n  expected ${expectedText}`);
+    const signer = sig.signing_address.toLowerCase();
+    console.log(`TEE signature by ${signer} over response ${responseHash.slice(0, 16)}…`);
 
-  for (const d of drafts) console.log(`  draft ${JSON.stringify(d.kind)}  "${d.rationale}"`);
-  if (drafts.length === 0) {
-    console.log("The model proposed nothing this run.");
-    return;
-  }
-
-  // Optional: keep the exact signed evidence (e.g. as a contract test fixture). Contains no
-  // books, only the model output, the request hash and the TEE signature.
-  if (process.env.SAVE_EVIDENCE) {
-    writeFileSync(
-      process.env.SAVE_EVIDENCE,
-      JSON.stringify(
-        { model, request_hash: requestHash, response: responseText, signature: sig.signature, signer },
-        null,
-        2
-      )
-    );
-    console.log(`Saved signed evidence to ${process.env.SAVE_EVIDENCE}`);
-  }
-
-  const registered = ctx.modelSigners.some(([a, m]) => a === signer && m === model);
-  if (!ctx.isV2) {
-    const msg = `${ctx.contractId} runs the v1 contract (no propose_attested). Run agent/scripts/testnet-v2-setup.mjs.`;
-    if (dryRun) {
-      console.log(`DRY_RUN=true: ${msg}`);
+    for (const d of drafts) console.log(`  draft ${JSON.stringify(d.kind)}  "${d.rationale}"`);
+    if (drafts.length === 0) {
+      if (process.env.DEBUG) console.log(`Model output: ${content}\nRequest: ${requestBody.slice(0, 4000)}`);
+      const owed = owedSoon(requestBody);
+      if (owed > 0 && attempt < MAX_ATTEMPTS) {
+        console.log(`The model returned no drafts while ${owed} bill(s) are owed and due; asking again (attempt ${attempt + 1}/${MAX_ATTEMPTS}).`);
+        continue;
+      }
+      console.log("The model proposed nothing this run.");
       return;
     }
-    throw new Error(msg);
-  }
-  if (!registered) {
-    throw new Error(
-      `TEE key ${signer} is not registered for ${model} on ${ctx.contractId}. ` +
-        "Run `npm run register-model -- --propose` and have the signers approve it."
-    );
-  }
-  if (dryRun) {
-    console.log("DRY_RUN=true: not submitting.");
-    return;
-  }
 
-  const account = await nearAccount();
-  const outcome = await account.functionCall({
-    contractId: ctx.contractId,
-    methodName: "propose_attested",
-    args: {
-      model,
-      request_hash: requestHash,
-      response: Buffer.from(responseBytes).toString("base64"),
-      signature: sig.signature,
-    },
-    gas: 150_000_000_000_000n, // 150 Tgas
-  });
-  const status = outcome.status as { SuccessValue?: string; Failure?: unknown };
-  if (!status.SuccessValue) throw new Error(`propose_attested failed: ${JSON.stringify(status)}`);
-  const ids = JSON.parse(Buffer.from(status.SuccessValue, "base64").toString()) as number[];
-  console.log(`Created proposals ${ids.map((i) => `#${i}`).join(", ")} (tx ${outcome.transaction.hash})`);
+    // Optional: keep the exact signed evidence (e.g. as a contract test fixture). Contains no
+    // books, only the model output, the request hash and the TEE signature.
+    if (process.env.SAVE_EVIDENCE) {
+      writeFileSync(
+        process.env.SAVE_EVIDENCE,
+        JSON.stringify(
+          { model, request_hash: requestHash, response: responseText, signature: sig.signature, signer },
+          null,
+          2
+        )
+      );
+      console.log(`Saved signed evidence to ${process.env.SAVE_EVIDENCE}`);
+    }
 
-  for (const id of ids) {
-    const p = (await account.viewFunction({
+    const registered = ctx.modelSigners.some(([a, m]) => a === signer && m === model);
+    if (!ctx.isV2) {
+      const msg = `${ctx.contractId} runs the v1 contract (no propose_attested). Run agent/scripts/testnet-v2-setup.mjs.`;
+      if (dryRun) {
+        console.log(`DRY_RUN=true: ${msg}`);
+        return;
+      }
+      throw new Error(msg);
+    }
+    if (!registered) {
+      throw new Error(
+        `TEE key ${signer} is not registered for ${model} on ${ctx.contractId}. ` +
+          "Run `npm run register-model -- --propose` and have the signers approve it."
+      );
+    }
+    if (dryRun) {
+      console.log("DRY_RUN=true: not submitting.");
+      return;
+    }
+
+    const account = await nearAccount();
+    const outcome = await account.functionCall({
       contractId: ctx.contractId,
-      methodName: "get_proposal",
-      args: { id },
-    })) as { auto_execute_after_ms: number | null };
-    console.log(
-      p.auto_execute_after_ms
-        ? `  #${id}: autonomy lane, executable after ${new Date(p.auto_execute_after_ms).toISOString()} unless vetoed`
-        : `  #${id}: needs signer approval`
-    );
+      methodName: "propose_attested",
+      args: {
+        model,
+        request_hash: requestHash,
+        response: Buffer.from(responseBytes).toString("base64"),
+        signature: sig.signature,
+      },
+      gas: 150_000_000_000_000n, // 150 Tgas
+    });
+    const status = outcome.status as { SuccessValue?: string; Failure?: unknown };
+    if (!status.SuccessValue) throw new Error(`propose_attested failed: ${JSON.stringify(status)}`);
+    const ids = JSON.parse(Buffer.from(status.SuccessValue, "base64").toString()) as number[];
+    console.log(`Created proposals ${ids.map((i) => `#${i}`).join(", ")} (tx ${outcome.transaction.hash})`);
+
+    for (const id of ids) {
+      const p = (await account.viewFunction({
+        contractId: ctx.contractId,
+        methodName: "get_proposal",
+        args: { id },
+      })) as { auto_execute_after_ms: number | null };
+      console.log(
+        p.auto_execute_after_ms
+          ? `  #${id}: autonomy lane, executable after ${new Date(p.auto_execute_after_ms).toISOString()} unless vetoed`
+          : `  #${id}: needs signer approval`
+      );
+    }
+    return;
   }
 }
 

@@ -13,3 +13,9 @@ submission.json
 # whitelisted example (matches .env.* above)
 !web/.env.local.example
 .vercel
+
+# Runtime attestation records written by agent/src/attestation.ts
+agent/attestations/
+
+# Real merchant books: private, sent only to the TEE model
+agent/data/books.json

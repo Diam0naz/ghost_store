@@ -76,13 +76,16 @@ export default function CheckoutModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-950/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-950/40 p-4 backdrop-blur-sm animate-fade-in"
       role="dialog"
       aria-modal="true"
       aria-label="Payment progress"
     >
-      <div className="card w-full max-w-sm p-6">
-        <h2 className="text-lg font-extrabold leading-tight text-primary-950">
+      <div
+        className="card w-full max-w-sm p-6 animate-modal-in"
+        style={{ animationDelay: "120ms" }}
+      >
+        <h2 className="text-lg font-semibold leading-tight text-primary-950">
           {title}
         </h2>
         <p className="mt-1 text-sm font-medium text-ink-600">{description}</p>

@@ -1,75 +1,80 @@
 @import "tailwindcss";
 
-/* Ghost Store brand — purple + very light purple, rounded display font */
+/* Ghost Store design system: restrained, neutral surfaces with one indigo accent.
+   Every page uses these tokens (primary-*, ink-*, line, .card, .btn-*), so the
+   whole app follows this file. */
 @theme {
-  --font-sans: "Baloo 2", "Nunito", "Quicksand", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-  /* Primary purple scale (600 is the brand color) */
-  --color-primary-50: #f6f2ff;
-  --color-primary-100: #ede7ff;
-  --color-primary-200: #dccdff;
-  --color-primary-300: #c2a5ff;
-  --color-primary-400: #a675fb;
-  --color-primary-500: #8b4df5;
-  --color-primary-600: #7a2ff0;
-  --color-primary-700: #6419dd;
-  --color-primary-800: #5414b8;
-  --color-primary-900: #461294;
-  --color-primary-950: #2d0a63;
+  /* Geist reads heavier than a rounded display font; keep emphasis calm. */
+  --font-weight-medium: 450;
+  --font-weight-semibold: 550;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 650;
 
-  /* Soft purple-grays for body text on the light theme */
-  --color-ink-400: #9d8fc4;
-  --color-ink-600: #6b5b95;
-  --color-ink-900: #2f2057;
+  /* Accent: a deep, slightly desaturated indigo. 50–200 are near-neutral tints
+     used for hovers, chips and subtle fills. 950 doubles as heading ink. */
+  --color-primary-50: #f6f7fb;
+  --color-primary-100: #eef0f7;
+  --color-primary-200: #e1e4f0;
+  --color-primary-300: #c4c9e8;
+  --color-primary-400: #8f96de;
+  --color-primary-500: #5d64d8;
+  --color-primary-600: #4b50d0;
+  --color-primary-700: #3d41b3;
+  --color-primary-800: #31348c;
+  --color-primary-900: #24265f;
+  --color-primary-950: #11132a;
 
-  --shadow-soft: 0 2px 16px rgb(122 47 240 / 0.08);
+  /* Neutral text */
+  --color-ink-400: #868b9e;
+  --color-ink-600: #4f5468;
+  --color-ink-900: #0e1120;
 
-  /* Mascot animations (empty-state ghost) */
+  /* Hairlines and surfaces */
+  --color-line: #e5e7ee;
+  --color-surface: #f7f8fa;
+
+  --shadow-soft: 0 1px 2px rgb(14 17 32 / 0.04), 0 1px 3px rgb(14 17 32 / 0.05);
+  --shadow-lift: 0 1px 2px rgb(14 17 32 / 0.04), 0 8px 24px -6px rgb(14 17 32 / 0.1);
+
+  --animate-card-in: card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-modal-in: modal-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  /* Kept for the legacy mascot components; not used in the main UI. */
   --animate-ghost-float: ghost-float 3.2s ease-in-out infinite;
   --animate-ghost-blink: ghost-blink 4.6s ease-in-out infinite;
   --animate-twinkle: twinkle 2.4s ease-in-out infinite;
-  --animate-card-in: card-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes ghost-float {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-2.5deg);
-  }
-  50% {
-    transform: translateY(-9px) rotate(2.5deg);
-  }
-}
-
-@keyframes ghost-blink {
-  0%,
-  88%,
-  96%,
-  100% {
-    transform: scaleY(1);
-  }
-  91%,
-  94% {
-    transform: scaleY(0.1);
-  }
-}
-
-@keyframes twinkle {
-  0%,
-  100% {
-    opacity: 0.25;
-    transform: scale(0.8) rotate(0deg);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.15) rotate(25deg);
-  }
+  --animate-pattern-float: pattern-float 9s ease-in-out infinite;
+  --animate-pattern-spin: pattern-spin 45s linear infinite;
 }
 
 @keyframes card-in {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.97);
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -77,21 +82,96 @@
   }
 }
 
+@keyframes ghost-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes ghost-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes pattern-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(var(--pattern-amp, -10px));
+  }
+}
+
+@keyframes pattern-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
-    background-color: var(--color-primary-50);
+    background-color: var(--color-surface);
     background-image: radial-gradient(
-        60rem 30rem at 85% -10%,
-        var(--color-primary-100),
-        transparent
-      ),
-      radial-gradient(50rem 25rem at 0% 0%, #f3ecff, transparent);
+      70rem 28rem at 50% -12rem,
+      rgb(93 100 216 / 0.08),
+      transparent 70%
+    );
     background-repeat: no-repeat;
     color: var(--color-ink-900);
+    font-feature-settings: "ss01", "cv11";
+    letter-spacing: -0.006em;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  /* Figures line up in tables, balances and hashes. */
+  .font-mono,
+  dd,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-mono {
+    letter-spacing: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary-500);
+    outline-offset: 2px;
   }
 
   ::selection {
@@ -101,23 +181,50 @@
 }
 
 @layer components {
-  /* Standard card treatment used across pages */
+  /* Standard surface used across pages. */
   .card {
-    @apply rounded-2xl border border-primary-100 bg-white shadow-soft animate-card-in;
+    @apply rounded-xl border border-line bg-white shadow-soft animate-card-in;
   }
 
-  /* Blinking mascot eyes — SVG-safe transform origin */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-ink-900 px-4 py-2 text-sm font-medium text-white shadow-soft transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink-900 shadow-soft transition-colors hover:border-primary-300 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  /* Small uppercase label above a value or section. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-400;
+  }
+
+  /* Faint dot grid for hero surfaces. */
+  .bg-grid {
+    background-image: radial-gradient(rgb(14 17 32 / 0.07) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
   .ghost-eye {
     transform-box: fill-box;
     transform-origin: center;
     animation: var(--animate-ghost-blink);
   }
+}
 
-  .btn-primary {
-    @apply rounded-full bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40;
+/* Reduced motion: every animation lands on its final frame instantly. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 
-  .btn-ghost {
-    @apply rounded-full border border-primary-200 bg-white px-5 py-2 text-sm font-semibold text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50;
+  .animate-pattern-float,
+  .animate-pattern-spin {
+    animation: none !important;
   }
 }

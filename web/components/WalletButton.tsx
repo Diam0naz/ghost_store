@@ -27,19 +27,22 @@ export default function WalletButton() {
 
   if (loading) {
     return (
-      <div className="h-9 w-28 animate-pulse rounded-full bg-primary-200" />
+      <div className="h-9 w-32 animate-pulse rounded-lg bg-primary-100" />
     );
   }
 
   if (accountId) {
     return (
-      <div className="flex items-center gap-2">
-        <span className="max-w-[140px] truncate rounded-full bg-primary-100 px-3 py-1 font-mono text-xs font-semibold text-primary-800">
-          {accountId}
+      <div className="flex items-center gap-1.5 animate-fade-in">
+        <span className="inline-flex h-9 max-w-[180px] items-center gap-2 rounded-lg border border-line bg-white px-3 shadow-soft">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <span className="truncate font-mono text-xs text-ink-900" title={accountId}>
+            {accountId}
+          </span>
         </span>
         <button
           onClick={() => signOut().catch(console.error)}
-          className="rounded-full border border-primary-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 transition-colors hover:border-primary-400 hover:text-primary-700"
+          className="inline-flex h-9 items-center rounded-lg px-2.5 text-xs font-medium text-ink-600 transition-colors hover:bg-primary-50 hover:text-ink-900"
         >
           Disconnect
         </button>
@@ -50,10 +53,11 @@ export default function WalletButton() {
   return (
     <>
       <button
+        data-connect-wallet-trigger
         onClick={() => setModalOpen(true)}
-        className="rounded-full bg-primary-600 px-4 py-1.5 text-xs font-bold text-white shadow-soft transition-colors hover:bg-primary-700"
+        className="btn-primary h-9 animate-fade-in"
       >
-        Connect Wallet
+        Connect wallet
       </button>
       <WalletModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </>

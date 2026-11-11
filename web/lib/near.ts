@@ -2,23 +2,59 @@
 // WalletConnection was removed in near-api-js v4; we use wallet-selector instead.
 // Contract calls use function-call access keys — no full access key exposure.
 
+import { useEffect, useState } from "react";
 import { setupWalletSelector, type WalletSelector } from "@near-wallet-selector/core";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 import { setupHereWallet } from "@near-wallet-selector/here-wallet";
 import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
 import { setupNightly } from "@near-wallet-selector/nightly";
-import { JsonRpcProvider } from "near-api-js";
+import { JsonRpcProvider } from "@near-js/providers";
+// JsonRpcProvider lives in the @near-js/providers scoped package (v2.5.1),
+// which is what near-api-js aggregates. Import it directly so the import works
+// on both near-api-js v6 (required by @meteorwallet/sdk) and v7.
 import { actionCreators, type Action } from "@near-js/transactions";
 
 export const NETWORK = process.env.NEXT_PUBLIC_NEAR_NETWORK ?? "testnet";
 export const RPC_URL =
   process.env.NEXT_PUBLIC_NEAR_RPC_URL ??
   (NETWORK === "mainnet"
-    ? "https://rpc.mainnet.near.org"
-    : "https://rpc.testnet.near.org");
+    ? "https://rpc.mainnet.fastnear.com"
+    : "https://rpc.testnet.fastnear.com");
 
 export const TREASURY_CONTRACT_ID =
   process.env.NEXT_PUBLIC_TREASURY_CONTRACT_ID ?? "";
+
+// Hard safety rule #1: single source of truth for network + account id validation.
+// Only wired in below for view calls / transactions that will actually run on chain;
+// the top-level constants are still exported so existing imports keep compiling.
+export function assertTestnetNetwork(): void {
+  if (NETWORK !== "testnet") {
+    throw new Error(
+      `Ghost Store is testnet-only. Found NEXT_PUBLIC_NEAR_NETWORK="${NETWORK}". Do not use mainnet here.`
+    );
+  }
+  if (!RPC_URL.includes("rpc.testnet.near.org") && !RPC_URL.includes("testnet") && !RPC_URL.includes("127.0.0.1")) {
+    throw new Error(
+      `Ghost Store only talks to testnet RPC. Found RPC_URL="${RPC_URL}". Rejecting anything that looks like mainnet.`
+    );
+  }
+}
+
+export function assertTestnetAccountId(accountId: string): void {
+  if (!accountId.endsWith(".testnet")) {
+    throw new Error(
+      `Ghost Store only accepts testnet accounts. Refusing account "${accountId}" — it does not end in ".testnet".`
+    );
+  }
+}
+
+export const TESTNET_ACCOUNT_SUFFIX = ".testnet";
+
+/** Throws if `receiverId` is not a testnet account. Used in `sendActions` and
+ * `callContract` before any state-changing transaction leaves the browser. */
+export function assertTxTestnet(receiverId: string): void {
+  assertTestnetAccountId(receiverId);
+}
 
 // Singletons — only initialised in the browser
 let _selector: WalletSelector | null = null;
@@ -133,6 +169,7 @@ export async function viewCall<T>(
   methodName: string,
   args: object = {}
 ): Promise<T> {
+  assertTestnetNetwork();
   const provider = new JsonRpcProvider({ url: RPC_URL });
   const rawResult = await provider.query({
     request_type: "call_function",
@@ -156,6 +193,7 @@ export async function sendActions(
 ): Promise<string> {
   const selector = await getSelector();
   const wallet = await selector.wallet();
+  assertTxTestnet(receiverId);
   const result = await wallet.signAndSendTransaction({
     receiverId,
     actions,
@@ -167,8 +205,8 @@ export async function sendActions(
 
 /**
  * Send a signed function call via the active wallet.
- * gas defaults to 30 Tgas for governance/reject, use "50000000000000" for approve-payout,
- * "150000000000000" for approve-allocate.
+ * gas defaults to 30 Tgas for governance/reject. Approve calls must pass
+ * APPROVE_GAS (150 Tgas) from lib/proposals — allocations chain callbacks.
  */
 export async function callContract(
   methodName: string,
@@ -178,6 +216,7 @@ export async function callContract(
 ): Promise<unknown> {
   const selector = await getSelector();
   const wallet = await selector.wallet();
+  assertTxTestnet(TREASURY_CONTRACT_ID);
   return wallet.signAndSendTransaction({
     receiverId: TREASURY_CONTRACT_ID,
     actions: [
@@ -189,4 +228,52 @@ export async function callContract(
       ),
     ],
   });
+}
+
+/** Signed function call on any contract (e.g. a token's ft_transfer_call). Testnet-guarded. */
+export async function callContractOn(
+  receiverId: string,
+  methodName: string,
+  args: object,
+  attachedDeposit = "0",
+  gas = "30000000000000"
+): Promise<unknown> {
+  const selector = await getSelector();
+  const wallet = await selector.wallet();
+  assertTxTestnet(receiverId);
+  return wallet.signAndSendTransaction({
+    receiverId,
+    actions: [actionCreators.functionCall(methodName, args, BigInt(gas), BigInt(attachedDeposit))],
+  });
+}
+
+/** Account balance in yoctoNEAR via RPC `view_account` — no signing needed. */
+export async function viewAccountBalance(accountId: string): Promise<string> {
+  assertTestnetNetwork();
+  const provider = new JsonRpcProvider({ url: RPC_URL });
+  const result = (await provider.query({
+    request_type: "view_account",
+    account_id: accountId,
+    finality: "optimistic",
+  })) as unknown as { amount: string };
+  return result.amount;
+}
+
+/** Live account id from wallet state; null while signed out. Browser-only. */
+export function useAccountId(): string | null {
+  const [accountId, setAccountId] = useState<string | null>(null);
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    subscribeAccountId(setAccountId)
+      .then((u) => (unsub = u))
+      .catch(() => {});
+    getAccountId()
+      .then((id) => {
+        if (id) assertTestnetAccountId(id);
+        setAccountId(id);
+      })
+      .catch(() => setAccountId(null));
+    return () => unsub?.();
+  }, []);
+  return accountId;
 }

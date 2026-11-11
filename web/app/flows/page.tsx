@@ -2,9 +2,9 @@
 // Flows page. Shows incoming payments (checkout settlements) and outgoing
 // payments from the treasury contract: executed and failed proposal payouts,
 // allocations and withdrawals, read live via `list_proposals`.
+// Data is public on chain; AccessBar shows the visitor's role above it.
 
-import { useState, useEffect } from "react";
-import { friendlyError } from "@/components/ErrorState";
+import AccessBar from "@/components/AccessBar";
 import EmptyState from "@/components/EmptyState";
 import {
   useTreasuryProposals,
@@ -70,6 +70,14 @@ function outgoingFromProposals(proposals: Proposal[] | undefined): FlowRow[] {
 const STUB_INCOMING: FlowRow[] = [];
 
 export default function FlowsPage() {
+  return (
+    <AccessBar>
+      <FlowsContent />
+    </AccessBar>
+  );
+}
+
+function FlowsContent() {
   const proposals = useTreasuryProposals();
   const outgoing = outgoingFromProposals(proposals.data);
   const rows = [...STUB_INCOMING, ...outgoing];
@@ -77,10 +85,11 @@ export default function FlowsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="mb-1 text-2xl font-extrabold tracking-tight text-primary-950">
+        <p className="eyebrow mb-2">Money movement</p>
+        <h1 className="text-[1.75rem] font-semibold leading-tight text-ink-900">
           Flows
         </h1>
-        <p className="text-sm font-medium text-ink-600">
+        <p className="mt-1.5 text-sm font-medium text-ink-600">
           Incoming payments and outgoing treasury actions
         </p>
       </div>

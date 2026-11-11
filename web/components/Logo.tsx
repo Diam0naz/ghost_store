@@ -49,7 +49,49 @@ export function GhostMark({ className }: { className?: string }) {
 
 export { GHOST_BODY, GHOST_EYES };
 
-/** Ghost mark on the purple rounded badge (the app logo). */
+/** The logo, animated: gentle float plus blinking eyes. Pure CSS motion, so it
+ * is safe in server components. Pass `delay`/`duration` to desync a group of
+ * them so they don't bob in lockstep. Inherits color from `currentColor`. */
+export function AnimatedGhost({
+  className = "",
+  delay = "0s",
+  duration = "3.2s",
+}: {
+  className?: string;
+  /** animation-delay, e.g. "0.8s" — staggers ghosts out of phase. */
+  delay?: string;
+  /** animation-duration override — varied periods read as organic motion. */
+  duration?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      className={`animate-ghost-float select-none ${className}`}
+      style={{ animationDelay: delay, animationDuration: duration }}
+      aria-hidden="true"
+    >
+      <path d={GHOST_BODY} fill="currentColor" />
+      <ellipse
+        className="ghost-eye"
+        cx="26.5"
+        cy="20"
+        rx="3"
+        ry="4"
+        fill="var(--color-primary-950)"
+      />
+      <ellipse
+        className="ghost-eye"
+        cx="37.5"
+        cy="20"
+        rx="3"
+        ry="4"
+        fill="var(--color-primary-950)"
+      />
+    </svg>
+  );
+}
+
+/** The app logo: the ghost mark in white on a dark rounded tile. */
 export default function Logo({
   size = 40,
   className = "",
@@ -59,10 +101,10 @@ export default function Logo({
 }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-[30%] bg-gradient-to-br from-primary-400 via-primary-500 to-primary-700 shadow-soft ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-[28%] bg-ink-900 shadow-soft ring-1 ring-black/5 ${className}`}
       style={{ width: size, height: size }}
     >
-      <GhostMark className="h-[68%] w-[68%] text-white" />
+      <GhostMark className="h-[62%] w-[62%] text-white" />
     </span>
   );
 }

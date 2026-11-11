@@ -1,11 +1,53 @@
 "use client";
-// Ghost-branded NEAR wallet connect modal. Replaces the stock wallet-selector
-// modal so sign-in matches the app's purple rounded design. Options come from
-// WALLET_OPTIONS (registered providers in lib/near.ts).
+import { friendlyError } from "@/components/ErrorState";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { connectWallet, WALLET_OPTIONS } from "@/lib/near";
 import Logo from "@/components/Logo";
+
+// ---------------------------------------------------------------------------
+// Wallet connect modal — Ghost-branded NEAR wallet connect dialog.
+//
+// Rendered through a single React portal into document.body so no ancestor with
+// transform, filter, will-change, contain, overflow or position can clip or
+// contain the fixed overlay. z-index layering: sticky navbar z-40, backdrop
+// z-50, modal card z-60.
+// ---------------------------------------------------------------------------
+
+type WalletId = (typeof WALLET_OPTIONS)[number]["id"];
+
+// ---------------------------------------------------------------------------
+// Scroll lock with layout-shift protection.
+// ---------------------------------------------------------------------------
+
+function useScrollLock(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+
+    // Preserve whatever the user already had, and restore it on cleanup.
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevScrollbarGutter = document.documentElement.style.scrollbarGutter;
+
+    // Keep the page size stable when the scrollbar disappears under overflow:
+    // hidden. `scrollbar-gutter: stable` reserves the scrollbar track so the
+    // content does not reflow when the modal opens.
+    document.documentElement.style.scrollbarGutter = "stable";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.documentElement.style.scrollbarGutter = prevScrollbarGutter;
+    };
+  }, [active]);
+}
+
+// ---------------------------------------------------------------------------
+// WalletModal
+// ---------------------------------------------------------------------------
 
 export default function WalletModal({
   open,
@@ -14,26 +56,82 @@ export default function WalletModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [connectingId, setConnectingId] = useState<WalletId | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Wallets whose icon failed to load fall back to the monogram tile.
-  const [brokenIcons, setBrokenIcons] = useState<Record<string, boolean>>({});
+  const [brokenIcons, setBrokenIcons] = useState<Record<WalletId, boolean>>(
+    () =>
+      Object.fromEntries(
+        WALLET_OPTIONS.map((w) => [w.id, false])
+      ) as Record<WalletId, boolean>
+  );
 
-  // Close on Escape.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const returnFocusRef = useRef<() => void>(() => {});
+
+  // Lock page scroll while the modal is open.
+  useScrollLock(open);
+
+  // Escape closes the modal from anywhere on the page.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  // Focus trap: active only while the modal is mounted and open.
+  useEffect(() => {
+    if (!open) return;
+    const card = cardRef.current;
+    if (!card) return;
 
-  async function connect(id: string) {
+    const focusable = Array.from(
+      card.querySelectorAll<HTMLElement>(
+        'button:not([disabled]):not([tabindex="-1"]), [href], input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    const first = focusable[0] ?? null;
+    const last = focusable[focusable.length - 1] ?? null;
+
+    const previousFocus = document.activeElement as HTMLElement | null;
+    first?.focus();
+
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || focusable.length === 0) return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    };
+
+    card.addEventListener("keydown", trap);
+    return () => {
+      card.removeEventListener("keydown", trap);
+      // Return focus to the "Connect Wallet" trigger on close.
+      const trigger = document.querySelector<HTMLButtonElement>("[data-connect-wallet-trigger]");
+      trigger?.focus();
+    };
+  }, [open]);
+
+  // Reset transient state when the modal reopens.
+  useEffect(() => {
+    if (open) {
+      setError(null);
+      setConnectingId(null);
+    }
+  }, [open]);
+
+  async function connect(id: WalletId) {
     setError(null);
     setConnectingId(id);
     try {
-      // Redirect wallets navigate away; extension wallets resolve in place.
       await connectWallet(id);
       onClose();
     } catch (e) {
@@ -41,29 +139,44 @@ export default function WalletModal({
       if (/not installed|no provider/i.test(msg)) {
         setError("That wallet isn't installed in this browser.");
       } else {
-        setError(msg);
+        const friendly = friendlyError(e);
+        setError(friendly.startsWith("Something went wrong") ? msg : friendly);
       }
       setConnectingId(null);
     }
   }
 
-  return (
+  if (!open) return null;
+
+  const overlay = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-950/40 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex min-h-screen items-center justify-center bg-[rgba(36,14,77,0.55)] p-4 backdrop-blur-sm animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
       role="dialog"
       aria-modal="true"
-      aria-label="Connect a NEAR wallet"
+      aria-labelledby="wallet-modal-title"
+      aria-hidden="false"
+      tabIndex={-1}
     >
       <div
-        className="card w-full max-w-sm overflow-hidden p-6"
+        ref={cardRef}
+        className="relative z-60 w-full max-w-[420px] max-h-[90dvh] overflow-y-auto rounded-xl border border-primary-100 bg-white p-6 shadow-2xl animate-modal-in"
+        style={{ animationDelay: "80ms" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-5 flex items-start justify-between">
+        <div className="mb-5 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <Logo size={38} />
             <div>
-              <h2 className="text-lg font-extrabold leading-tight text-primary-950">
+              <h2
+                id="wallet-modal-title"
+                className="text-lg font-semibold leading-tight text-primary-950"
+              >
                 Connect a NEAR wallet
               </h2>
               <p className="text-xs font-medium text-ink-400">
@@ -72,9 +185,10 @@ export default function WalletModal({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-primary-100 hover:text-primary-700"
-            aria-label="Close"
+            aria-label="Close wallet connect modal"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-primary-100 hover:text-primary-700"
           >
             ✕
           </button>
@@ -86,6 +200,7 @@ export default function WalletModal({
             return (
               <button
                 key={w.id}
+                type="button"
                 onClick={() => connect(w.id)}
                 disabled={connectingId !== null}
                 className="group flex w-full items-center gap-3 rounded-xl border border-primary-100 bg-white px-4 py-3 text-left transition-all hover:border-primary-300 hover:bg-primary-50 disabled:cursor-wait disabled:opacity-60"
@@ -137,4 +252,6 @@ export default function WalletModal({
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }

@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 // Customer-facing checkout. Accepts an order reference from the URL, lets the
 // customer pick any payment token, shows a live NEAR Intents quote, then on Pay:
 // wet quote → deposit tx → deposit/submit → poll status to a terminal state.
@@ -22,7 +23,6 @@ import {
 } from "wagmi";
 import { mainnet, arbitrum, base, polygon, bsc, type Chain } from "wagmi/chains";
 import { actionCreators } from "@near-js/transactions";
-import WalletButton from "@/components/WalletButton";
 import CheckoutModal, { type CheckoutStep } from "@/components/CheckoutModal";
 import {
   useIntentsTokens,
@@ -253,20 +253,18 @@ export default function CheckoutPage() {
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div>
-        <h1 className="mb-1 text-2xl font-extrabold tracking-tight text-primary-950">
+        <p className="eyebrow mb-2">Payments</p>
+        <h1 className="text-[1.75rem] font-semibold leading-tight text-ink-900">
           Checkout
         </h1>
-        <p className="text-sm font-medium text-ink-600">
+        <p className="mt-1.5 text-sm font-medium text-ink-600">
           Order <span className="font-mono font-bold text-primary-800">{reference}</span>{" "}
           · pay with any token, the merchant receives {destSymbol}.
         </p>
       </div>
 
       <div className="card space-y-4 p-6">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-bold text-primary-950">Pay with any token</h2>
-          <WalletButton />
-        </div>
+        <h2 className="font-bold text-primary-950">Pay with any token</h2>
 
         {/* Token selector */}
         <label className="block">
@@ -436,15 +434,21 @@ export default function CheckoutPage() {
       {depositAddress && status.data && (
         <div className="card flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">
-              {status.data.status === "SUCCESS"
-                ? "✅"
-                : STATUS_TEXT[status.data.status].startsWith("Payment refunded") ||
-                  status.data.status === "FAILED" ||
-                  status.data.status === "INCOMPLETE_DEPOSIT"
-                ? "❌"
-                : "⏳"}
-            </span>
+            {status.data.status === "SUCCESS" ? (
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/70">
+                <Icon name="check" />
+              </span>
+            ) : STATUS_TEXT[status.data.status].startsWith("Payment refunded") ||
+              status.data.status === "FAILED" ||
+              status.data.status === "INCOMPLETE_DEPOSIT" ? (
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 text-red-600 ring-1 ring-red-200/70">
+                <Icon name="x" />
+              </span>
+            ) : (
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 ring-1 ring-amber-200/70">
+                <Icon name="clock" />
+              </span>
+            )}
             <div>
               <p className="font-bold text-primary-950">
                 {STATUS_TEXT[status.data.status]}
@@ -754,8 +758,9 @@ function EvmRequirements({
           </button>
         </div>
       ) : (
-        <span>
-          ✅ {address?.slice(0, 6)}…{address?.slice(-4)} on {chain.name}
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="check" className="h-3.5 w-3.5 text-emerald-600" />
+          {address?.slice(0, 6)}…{address?.slice(-4)} on {chain.name}
         </span>
       )}
     </div>

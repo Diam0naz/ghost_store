@@ -1,0 +1,54 @@
+{
+  "_comment": "Example private books. Copy to books.json (git-ignored) and edit. This file is sent only to the TEE model; only its sha256 (inside the request hash) goes on chain. Amounts are in USDT (6 decimals in the contract).",
+  "merchant": "Ghost Store",
+  "currency": "USDT",
+  "period": "2026-11-01 to 2026-11-10",
+  "sales": {
+    "gross": 18420.5,
+    "refunds": 312.0,
+    "by_channel": {
+      "online_checkout": 15210.5,
+      "pop_up_market": 3210.0
+    },
+    "top_customers": [
+      {
+        "name": "Ana Petrova",
+        "email": "ana@example.com",
+        "spend": 1240.0
+      },
+      {
+        "name": "Kofi Mensah",
+        "email": "kofi@example.com",
+        "spend": 980.0
+      }
+    ]
+  },
+  "bills": [
+    {
+      "vendor": "Packaging supplier",
+      "vendor_account": "packaging.treasury-dev.testnet",
+      "invoice": "PKG-2291",
+      "amount": 40.0,
+      "due": "2026-11-12",
+      "note": "Recurring monthly packaging order"
+    },
+    {
+      "vendor": "Courier",
+      "vendor_account": "courier.treasury-dev.testnet",
+      "invoice": "CR-7781",
+      "amount": 25.0,
+      "due": "2026-11-15",
+      "note": "Weekly delivery batch"
+    },
+    {
+      "vendor": "New wholesale fabric mill",
+      "vendor_account": "fabric-mill.treasury-dev.testnet",
+      "invoice": "FM-0042",
+      "amount": 120.0,
+      "due": "2026-11-14",
+      "note": "First order with this supplier"
+    }
+  ],
+  "payroll_next_30_days": 2100.0,
+  "notes": "Keep at least 30 days of payroll liquid. Prefer paying recurring vendors on time."
+}

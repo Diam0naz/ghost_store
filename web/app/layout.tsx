@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         {/* Geist + Geist Mono, loaded at runtime so builds stay offline-safe. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="flex min-h-screen flex-col font-sans antialiased">
+      <body className="flex min-h-screen flex-col font-sans antialiased" suppressHydrationWarning>
         <QueryProvider>
         <header className="sticky top-0 z-40 border-b border-line/80 bg-white/75 backdrop-blur-md supports-[backdrop-filter]:bg-white/65">
           <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">

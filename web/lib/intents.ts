@@ -157,6 +157,9 @@ function describeQuoteError(status: number, body: string): string {
 export function friendlyIntentsError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "");
   const m = raw.toLowerCase();
+  if (m.includes("within timeout") || m.includes("timed out") || /quote 50[234]/.test(m)) {
+    return "NEAR Intents' pricing service isn't responding right now. Nothing was charged. Try again in a few minutes.";
+  }
   if (m.includes("internal server error")) {
     return "The swap service can't price this right now. Try again in a moment.";
   }

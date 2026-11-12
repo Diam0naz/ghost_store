@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { connectWallet, WALLET_OPTIONS } from "@/lib/near";
 import Logo from "@/components/Logo";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { findMetaMask, METAMASK_FALLBACK_ICON, METAMASK_MISSING } from "@/lib/evm";
 
 // ---------------------------------------------------------------------------
 // Wallet connect modal — Ghost-branded NEAR wallet connect dialog.
@@ -64,6 +66,32 @@ export default function WalletModal({
         WALLET_OPTIONS.map((w) => [w.id, false])
       ) as Record<WalletId, boolean>
   );
+
+  // EVM wallet (MetaMask) via wagmi: the same connection the checkout uses to pay.
+  const evm = useAccount();
+  const { connectAsync, connectors } = useConnect();
+  const { disconnect: disconnectEvm } = useDisconnect();
+  const [evmBusy, setEvmBusy] = useState(false);
+  const metaMask = findMetaMask(connectors);
+  const metaMaskIcon = metaMask?.icon ?? METAMASK_FALLBACK_ICON;
+
+  async function connectMetaMask() {
+    setError(null);
+    if (!metaMask) {
+      setError(METAMASK_MISSING);
+      return;
+    }
+    setEvmBusy(true);
+    try {
+      await connectAsync({ connector: metaMask });
+      onClose();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(/rejected|denied/i.test(msg) ? "You cancelled the MetaMask request." : msg);
+    } finally {
+      setEvmBusy(false);
+    }
+  }
 
   const cardRef = useRef<HTMLDivElement | null>(null);
   const returnFocusRef = useRef<() => void>(() => {});
@@ -177,7 +205,7 @@ export default function WalletModal({
                 id="wallet-modal-title"
                 className="text-lg font-semibold leading-tight text-primary-950"
               >
-                Connect a NEAR wallet
+                Connect a wallet
               </h2>
               <p className="text-xs font-medium text-ink-400">
                 Function-call access keys only — never your full key
@@ -238,6 +266,41 @@ export default function WalletModal({
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="eyebrow mb-2">Pay at checkout (mainnet)</p>
+          {evm.isConnected && evm.address ? (
+            <div className="flex items-center gap-3 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3">
+              <img src={metaMaskIcon} alt="" width={40} height={40} aria-hidden="true" className="h-10 w-10 shrink-0 rounded-xl" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-bold text-primary-950">{evm.connector?.name ?? "EVM wallet"} connected</span>
+                <span className="block truncate font-mono text-xs text-ink-400" title={evm.address}>{evm.address}</span>
+              </span>
+              <button type="button" onClick={() => disconnectEvm()} className="text-xs font-medium text-ink-600 hover:text-ink-900">
+                Disconnect
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={connectMetaMask}
+              disabled={evmBusy || connectingId !== null}
+              className="group flex w-full items-center gap-3 rounded-xl border border-primary-100 bg-white px-4 py-3 text-left transition-all hover:border-primary-300 hover:bg-primary-50 disabled:cursor-wait disabled:opacity-60"
+            >
+              <img src={metaMaskIcon} alt="" width={40} height={40} aria-hidden="true" className="h-10 w-10 shrink-0 rounded-xl shadow-soft transition-transform group-hover:scale-105" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-bold text-primary-950">MetaMask</span>
+                <span className="block text-xs font-medium text-ink-400">
+                  {evmBusy ? "Check MetaMask…" : "Pay from BNB Chain, Base, Arbitrum, Polygon or Ethereum"}
+                </span>
+              </span>
+              <span className="text-ink-400 transition-all group-hover:translate-x-0.5 group-hover:text-primary-600">→</span>
+            </button>
+          )}
+          <p className="mt-2 text-[11px] font-medium text-ink-400">
+            For paying only. Approving or vetoing treasury actions needs a NEAR wallet above.
+          </p>
         </div>
 
         {error && (

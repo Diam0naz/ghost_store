@@ -1,5 +1,7 @@
 "use client";
 import Icon from "@/components/Icon";
+import { friendlyError } from "@/components/ErrorState";
+import { findMetaMask, METAMASK_MISSING } from "@/lib/evm";
 // Customer-facing checkout. Accepts an order reference from the URL, lets the
 // customer pick any payment token, shows a live NEAR Intents quote, then on Pay:
 // wet quote → deposit tx → deposit/submit → poll status to a terminal state.
@@ -159,6 +161,11 @@ export default function CheckoutPage() {
   const params = useParams<{ id: string }>();
   const reference = typeof params?.id === "string" ? params.id : "demo";
   const evmAccount = useAccount();
+  // ?preview=celebration shows the success screen without paying (clearly labelled).
+  const [preview, setPreview] = useState(false);
+  useEffect(() => {
+    setPreview(new URLSearchParams(window.location.search).get("preview") === "celebration");
+  }, []);
 
   const tokensQ = useIntentsTokens(JWT);
   const [nearAccountId, setNearAccountId] = useState<string | null>(null);
@@ -252,6 +259,27 @@ export default function CheckoutPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
+      {preview && (
+        <CheckoutModal
+          open
+          celebrate
+          title="Payment complete (preview)"
+          description="Preview of the success screen. No payment was made."
+          amountLabel="1.199880 USDC"
+          steps={[
+            { label: "Confirm the payment in your wallet", state: "done" },
+            { label: "Your transfer arrives", state: "done" },
+            { label: "Converted to USDC for the merchant", state: "done" },
+          ]}
+          summary={<div>Preview only: nothing was sent or received.</div>}
+          reference={reference}
+          canClose
+          onClose={() => {
+            setPreview(false);
+            window.history.replaceState(null, "", window.location.pathname);
+          }}
+        />
+      )}
       <div>
         <p className="eyebrow mb-2">Payments</p>
         <h1 className="text-[1.75rem] font-semibold leading-tight text-ink-900">
@@ -268,8 +296,12 @@ export default function CheckoutPage() {
 
         {/* Token selector */}
         <label className="block">
-          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-ink-400">
+          <span className="mb-1 flex items-baseline justify-between text-xs font-bold uppercase tracking-wide text-ink-400">
             Pay with
+            {/* Inline, not a line of its own, so the form doesn't jump when the list arrives. */}
+            {tokensQ.isPending && (
+              <span className="font-medium normal-case tracking-normal">Loading tokens…</span>
+            )}
           </span>
           <select
             className="w-full rounded-xl border border-primary-200 bg-white px-3 py-2 text-sm font-semibold text-primary-950 focus:border-primary-400 focus:outline-none"
@@ -288,11 +320,6 @@ export default function CheckoutPage() {
               </option>
             ))}
           </select>
-          {tokensQ.isPending && (
-            <span className="mt-1 block text-xs font-medium text-ink-400">
-              Loading the token list…
-            </span>
-          )}
           {tokensQ.isError && (
             <span className="mt-1 block text-xs font-semibold text-red-600">
               Couldn&apos;t load the token list — showing NEAR only.
@@ -679,6 +706,8 @@ function PaymentSection({
         txUrl={txUrl}
         canClose={terminal || exec.isError}
         onClose={() => setModalDismissed(true)}
+        celebrate={succeeded}
+        amountLabel={receiveLabel}
       />
     </>
   );
@@ -718,6 +747,8 @@ function EvmRequirements({
   const { address, isConnected, chainId } = useAccount();
   const { connectAsync, connectors } = useConnect();
   const { switchChainAsync } = useSwitchChain();
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const metaMask = findMetaMask(connectors);
 
   if (!enabled) return null;
   const chain = EVM_CHAINS[token.blockchain];
@@ -735,14 +766,20 @@ function EvmRequirements({
     <div className="rounded-xl bg-primary-50 px-4 py-3 text-xs font-medium text-ink-600">
       {!isConnected ? (
         <div className="flex items-center justify-between gap-3">
-          <span>{token.symbol} is paid from an EVM wallet.</span>
+          <span>{connectError ?? `${token.symbol} is paid from MetaMask.`}</span>
           <button
-            onClick={() =>
-              connectAsync({ connector: connectors[0] }).catch(console.error)
-            }
+            onClick={() => {
+              setConnectError(null);
+              if (!metaMask) return setConnectError(METAMASK_MISSING);
+              connectAsync({ connector: metaMask }).catch((e: unknown) =>
+                setConnectError(
+                  /rejected|denied/i.test(String(e)) ? "You cancelled the MetaMask request." : friendlyError(e)
+                )
+              );
+            }}
             className="btn-ghost shrink-0 text-xs"
           >
-            Connect EVM wallet
+            Connect MetaMask
           </button>
         </div>
       ) : wrongChain ? (

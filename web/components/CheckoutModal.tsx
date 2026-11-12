@@ -4,7 +4,8 @@
 // It only closes itself when the payment reaches a terminal state, so a
 // half-finished swap can't be dismissed by accident.
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Confetti, CountUp, SuccessBadge } from "@/components/Celebration";
 
 export type StepState = "todo" | "active" | "done" | "error";
 
@@ -51,6 +52,8 @@ export default function CheckoutModal({
   txUrl,
   onClose,
   canClose,
+  celebrate = false,
+  amountLabel,
 }: {
   open: boolean;
   title: string;
@@ -62,7 +65,17 @@ export default function CheckoutModal({
   txUrl?: string | null;
   onClose: () => void;
   canClose: boolean;
+  /** True once the payment has settled: confetti, check badge, amount count-up. */
+  celebrate?: boolean;
+  /** What the merchant received, e.g. "0.999898 USDC"; counted up when celebrating. */
+  amountLabel?: string | null;
 }) {
+  // Confetti fires once per success, not on every re-render.
+  const [confettiLive, setConfettiLive] = useState(false);
+  useEffect(() => {
+    if (open && celebrate) setConfettiLive(true);
+  }, [open, celebrate]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -75,6 +88,8 @@ export default function CheckoutModal({
   if (!open) return null;
 
   return (
+    <>
+    {confettiLive && <Confetti onDone={() => setConfettiLive(false)} />}
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-primary-950/40 p-4 backdrop-blur-sm animate-fade-in"
       role="dialog"
@@ -82,13 +97,28 @@ export default function CheckoutModal({
       aria-label="Payment progress"
     >
       <div
-        className="card w-full max-w-sm p-6 animate-modal-in"
+        className={`card w-full max-w-sm p-6 animate-modal-in ${celebrate ? "overflow-hidden" : ""}`}
         style={{ animationDelay: "120ms" }}
       >
-        <h2 className="text-lg font-semibold leading-tight text-primary-950">
-          {title}
-        </h2>
-        <p className="mt-1 text-sm font-medium text-ink-600">{description}</p>
+        {celebrate ? (
+          <div className="text-center">
+            <SuccessBadge />
+            <h2 className="text-lg font-semibold leading-tight text-primary-950">{title}</h2>
+            {amountLabel && (
+              <p className="mt-2 text-3xl font-semibold tracking-tight text-emerald-600 animate-celebrate-rise">
+                +<CountUp label={amountLabel.replace(/^≈\s*/, "")} />
+              </p>
+            )}
+            <p className="mt-1 text-sm font-medium text-ink-600">{description}</p>
+          </div>
+        ) : (
+          <>
+            <h2 className="text-lg font-semibold leading-tight text-primary-950">
+              {title}
+            </h2>
+            <p className="mt-1 text-sm font-medium text-ink-600">{description}</p>
+          </>
+        )}
 
         <ul className="mt-5 space-y-3">
           {steps.map((step) => (
@@ -147,5 +177,6 @@ export default function CheckoutModal({
         )}
       </div>
     </div>
+    </>
   );
 }

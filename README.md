@@ -7,8 +7,9 @@ An AI treasurer for merchants. The AI reads the merchant's books privately insid
 > AI proposals whose NEAR AI TEE signature is verified by the contract, a bounded autonomy lane,
 > agent-to-agent invoices and invoice NFTs with a factoring fee. Two invoices were paid by the
 > autonomy lane with no signer approval (see [What is proven on testnet](#what-is-proven-on-testnet-v2)).
-> 101 contract unit tests, one using a real NEAR AI Cloud TEE signature. The checkout / NEAR
-> Intents leg has not been proven end to end. Anything planned is labelled "planned".
+> 101 contract unit tests, one using a real NEAR AI Cloud TEE signature. The checkout settled a real
+> mainnet payment through NEAR Intents on 2026-11-12 (see
+> [Proven on mainnet](#proven-on-mainnet-checkout-via-near-intents)). Anything planned is labelled "planned".
 
 ## What's different
 
@@ -77,6 +78,27 @@ Agent Economy · NFTs That Do Something
 4. After the 5-minute window, `npm run execute-auto` (or **Execute payout** in the UI; anyone can
    call it) pays the vendors. Pause, a vendor removal or a breached reserve floor stops it.
 
+## Proven on mainnet: checkout via NEAR Intents
+
+On 2026-11-12 a customer paid the demo order from MetaMask with USDC on BNB Chain. NEAR Intents
+(1Click API) swapped it and credited the merchant, `diamonaz.near`, with USDC on NEAR inside the
+Intents ledger (`intents.near`, `recipientType: INTENTS`), so the merchant account needed no NEAR
+and no token storage deposit.
+
+| Step | Value |
+|---|---|
+| Customer paid | 1.2 USDC on BNB Chain, from `0x5Ce7a697d2710275e14179E8D62C816628737A6b` |
+| Deposit tx (BNB Chain) | [`0x8444c228…a23cfbf8`](https://bscscan.com/tx/0x8444c228ef0bf906931857cc949cfbda090bc612fc930cbcdee5bf70a23cfbf8) to deposit address `0x146a3d10a89163b2ee0006b1de2af49ea2d02609` |
+| Merchant received | 1.199876 USDC (`nep141:17208628…6133a1`) for `diamonaz.near` in `intents.near` |
+| Settlement tx (NEAR) | [`CxmAGV15…DPWsdc`](https://nearblocks.io/txns/CxmAGV15vzuia7ZRMwupLHUXGVrYg3qXbNyzMiDPWsdc) |
+| 1Click status | `SUCCESS`, about 30 s from deposit to credit; gas paid by the customer: about 0.000003 BNB |
+
+Check it yourself: `GET https://1click.chaindefuser.com/v0/status?depositAddress=0x146a3d10a89163b2ee0006b1de2af49ea2d02609`,
+or call `mt_balance_of` on `intents.near` for `diamonaz.near`.
+
+Not yet connected: the funds land in the merchant's Intents balance, not in the testnet treasury
+contract. Moving settled checkout revenue into a mainnet treasury is the next step.
+
 ## What is proven on testnet (v2)
 
 Treasury `vault2.treasury-dev.testnet`, 2-of-2 signers as below. Configured by governance
@@ -127,7 +149,7 @@ venue. Vault balance 400 USDT. Details and the untested-paths list: [`docs/CONTR
 ## Architecture
 
 ```
-customer -> checkout (web) -> NEAR Intents quote/settle (planned) -> treasury contract
+customer -> checkout (web) -> NEAR Intents quote/settle (mainnet, proven) -> merchant (treasury link planned)
                                                                         ^      ^
 agent: books + chain state -> NEAR AI TEE model -> signed output ------+      |
        (propose_attested; contract verifies the TEE signature)                |
@@ -148,9 +170,9 @@ anyone: execute_auto after the veto window
 
 ## Limits (honest about what this does not do)
 
-- v2 is not deployed yet; until then only the v1 results above are on chain.
-- The checkout depends on NEAR Intents, which is mainnet-only; the treasury is on testnet. No
-  payment has been settled through Intents in this build.
+- The checkout depends on NEAR Intents, which is mainnet-only; the treasury is on testnet. One
+  real payment has settled on mainnet (above), into the merchant's Intents balance; it is not
+  yet routed into a treasury contract.
 - A TEE signature proves origin, not intent: the holder of the API and proposer keys writes the
   prompt. The autonomy lane's caps, allowlist, veto window and reserve floor are what bound the damage.
 - The agent process itself does not run in a TEE; it relays bytes it cannot alter undetected.

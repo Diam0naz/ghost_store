@@ -26,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="flex min-h-screen flex-col font-sans antialiased">
+        <QueryProvider>
         <header className="sticky top-0 z-40 border-b border-line/80 bg-white/75 backdrop-blur-md supports-[backdrop-filter]:bg-white/65">
           <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
             <div className="flex items-center gap-8">
@@ -42,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6">
-          <QueryProvider>{children}</QueryProvider>
+          {children}
         </main>
 
         <footer className="border-t border-line bg-white/60">
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
           </div>
         </footer>
+        </QueryProvider>
       </body>
     </html>
   );

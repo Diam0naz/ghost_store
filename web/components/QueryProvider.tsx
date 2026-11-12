@@ -11,7 +11,10 @@ import { useState } from "react";
 
 const wagmiConfig = createConfig({
   chains: [mainnet, arbitrum, base, polygon, bsc],
-  connectors: [injected()],
+  // EIP-6963 discovery (on by default) adds one connector per installed wallet, MetaMask
+  // included; this target is a fallback for MetaMask builds that don't announce themselves.
+  multiInjectedProviderDiscovery: true,
+  connectors: [injected({ target: "metaMask" })],
   transports: {
     [mainnet.id]: http(),
     [arbitrum.id]: http(),

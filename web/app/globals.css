@@ -4,8 +4,8 @@
    Every page uses these tokens (primary-*, ink-*, line, .card, .btn-*), so the
    whole app follows this file. */
 @theme {
-  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
   /* Geist reads heavier than a rounded display font; keep emphasis calm. */
   --font-weight-medium: 450;
@@ -42,6 +42,10 @@
   --animate-card-in: card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-fade-in: fade-in 0.25s ease-out both;
   --animate-modal-in: modal-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-celebrate-pop: celebrate-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-celebrate-ring: celebrate-ring 1.6s cubic-bezier(0.22, 1, 0.36, 1) 2 both;
+  --animate-celebrate-check: celebrate-check 0.45s 0.35s ease-out both;
+  --animate-celebrate-rise: celebrate-rise 0.5s 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 
   /* Kept for the legacy mascot components; not used in the main UI. */
   --animate-ghost-float: ghost-float 3.2s ease-in-out infinite;
@@ -49,6 +53,42 @@
   --animate-twinkle: twinkle 2.4s ease-in-out infinite;
   --animate-pattern-float: pattern-float 9s ease-in-out infinite;
   --animate-pattern-spin: pattern-spin 45s linear infinite;
+}
+
+/* Size-matched stand-ins while Geist downloads (values from Next.js's capsize metrics), so
+   text keeps its width and line height when the real font swaps in: no header jump. */
+@font-face {
+  font-family: "Geist Fallback";
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Helvetica");
+  ascent-override: 95.94%;
+  descent-override: 28.16%;
+  line-gap-override: 0%;
+  size-adjust: 104.76%;
+}
+@font-face {
+  font-family: "Geist Mono Fallback";
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Helvetica");
+  ascent-override: 74.67%;
+  descent-override: 21.92%;
+  line-gap-override: 0%;
+  size-adjust: 134.59%;
+}
+
+/* Payment success: badge pops in, rings pulse out, check draws itself, amount rises. */
+@keyframes celebrate-pop {
+  0% { opacity: 0; transform: scale(0.3) rotate(-20deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+@keyframes celebrate-ring {
+  0% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.2); }
+}
+@keyframes celebrate-check {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes celebrate-rise {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes card-in {

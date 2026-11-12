@@ -112,9 +112,10 @@ payout, 100 USDT per UTC day, 5-minute veto window, invoices only), 0.5% factori
 | `propose_attested` from a live Qwen3.6 completion | #7, #8 `PayInvoice` | Contract verified the TEE signature and put both in the autonomy lane |
 | Keeper calls `execute_auto` after the veto window | #7, #8 | `Executed` with **zero approvals**; vendors hold 40 and 25 USDT, invoices `Paid` |
 | An early agent proposed a raw payout for a bill that had an invoice | #9 `Payout` 120 to fabric-mill | Not allowlisted, so no autonomy; signers `Rejected` it. The agent now reconciles bills and invoices deterministically before inference |
-| Invoice that matches no bill | #3 FM-0099 (45) | `Open`; not proposed |
+| New supplier's invoice, not allowlisted | #10 `PayInvoice` for #2 FM-0042 (120) | AI proposed it from a fresh TEE-signed completion; `Executed` after **2-of-2** approval; invoice `Paid` |
+| Invoice that matches no bill | #3 FM-0099 (45) | `Open`; never proposed |
 
-Vault balance after: 335 USDT (400 − 40 − 25). Daily lane usage: 65 of 100 USDT.
+Vault balance after: 215 USDT (400 − 40 − 25 − 120).
 
 ## What is proven on testnet (v1)
 

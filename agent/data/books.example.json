@@ -47,6 +47,14 @@
       "amount": 120.0,
       "due": "2026-11-14",
       "note": "First order with this supplier"
+    },
+    {
+      "vendor": "Packaging supplier",
+      "vendor_account": "packaging.treasury-dev.testnet",
+      "invoice": "PKG-2310",
+      "amount": 35.0,
+      "due": "2026-11-16",
+      "note": "Holiday packaging top-up"
     }
   ],
   "payroll_next_30_days": 2100.0,

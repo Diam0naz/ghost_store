@@ -19,6 +19,7 @@
 //   node scripts/testnet-v2-setup.mjs move-funds      # 2-of-2 payout of the old vault's USDT
 //                                                     #   to TREASURY_CONTRACT_ID
 //   node scripts/testnet-v2-setup.mjs fake-invoice    # only the unmatched FM-0099 invoice
+//   node scripts/testnet-v2-setup.mjs demo-invoice    # PKG-2310 (35 USDT) for the demo video
 //   node scripts/testnet-v2-setup.mjs cancel-invoice 4  # issuer withdraws an open invoice
 //   node scripts/testnet-v2-setup.mjs vote reject 9   # approve/reject as a signer
 //                                                     #   (default treasury-dev.testnet)
@@ -254,6 +255,28 @@ switch (step) {
     console.log(`invoice #${id}: FM-0099 from ${NEW_SUPPLIER} (matches no bill; the AI must not pay it)`);
     break;
   }
+  case "demo-invoice": {
+    // For the demo video: the packaging vendor's agent bills PKG-2310 (35 USDT), which matches
+    // a bill in books.example.json. Allowlisted vendor, under the caps -> autonomy lane.
+    const vendor = VENDORS[0];
+    const open = (await (await account(vendor)).viewFunction({ contractId: VAULT, methodName: "list_invoices", args: {} }))
+      .filter((i) => i.issuer === vendor && i.reference === "PKG-2310" && i.status !== "Cancelled");
+    if (open.length) {
+      console.log(`PKG-2310 already exists as invoice #${open[0].id} (${open[0].status}).`);
+      break;
+    }
+    const id = returned(
+      await (await account(vendor)).functionCall({
+        contractId: VAULT,
+        methodName: "submit_invoice",
+        args: { token: STABLE, amount: USDT(35), due_ms: Date.now() + 4 * 86_400_000, reference: "PKG-2310", document_hash: null },
+        gas: TGAS(30),
+        attachedDeposit: NEAR("0.01"),
+      })
+    );
+    console.log(`invoice #${id}: PKG-2310, 35 USDT from ${vendor}, minted as an NFT to the vendor`);
+    break;
+  }
   case "cancel-invoice": {
     // The issuer withdraws an open invoice it still holds (burns the NFT).
     const idArg = process.argv[3];
@@ -327,6 +350,6 @@ switch (step) {
     break;
   }
   default:
-    console.error("steps: deploy-fresh | fund | upgrade | proposer-key | vendors | governance <tee-address> | fee | move-funds | invoices | fake-invoice | cancel-invoice <id> | vote <approve|reject> <id> [signer]");
+    console.error("steps: deploy-fresh | fund | upgrade | proposer-key | vendors | governance <tee-address> | fee | move-funds | invoices | fake-invoice | demo-invoice | cancel-invoice <id> | vote <approve|reject> <id> [signer]");
     process.exit(2);
 }

@@ -5,7 +5,7 @@ import QueryProvider from "@/components/QueryProvider";
 import Logo from "@/components/Logo";
 import WalletButton from "@/components/WalletButton";
 import SiteNav from "@/components/SiteNav";
-import { NAV } from "@/lib/nav";
+import SiteFooter from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
   title: "Ghost Store — Confidential AI treasury on NEAR",
@@ -46,22 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
 
-        <footer className="border-t border-line bg-white/60">
-          <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-ink-600 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <div className="flex items-center gap-2.5">
-              <Logo size={22} />
-              <span className="font-medium text-ink-900">Ghost Store</span>
-              <span className="text-ink-400">· Built on NEAR · Testnet</span>
-            </div>
-            <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Footer">
-              {NAV.map((n) => (
-                <Link key={n.href} href={n.href} className="hover:text-ink-900">
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-        </footer>
+        <SiteFooter />
         </QueryProvider>
       </body>
     </html>

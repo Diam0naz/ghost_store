@@ -107,7 +107,11 @@ a change's delay starts. With `KEEPER_VAULT_ACCOUNT_ID` and `KEEPER_VAULT_PRIVAT
 function-call key for `release` on the vault) it also pays installments as they fall due;
 without them it only alerts, and anyone can call `release`. Tests: `npm test` in `agent/`.
 
-## Next
+## Web
 
-- **Web:** a vault page: balance, pending requests with Cancel, Freeze, and a "Request funds"
-  form that only works when signed from the device.
+`/vault` (or `/vault?vault=<account>`; default `NEXT_PUBLIC_COLD_VAULT_ID`): balance, what is
+owed to pending requests, this week's releases against the cap, the rules in plain words, each
+request's installments with **Release installment** (anyone, when due) and **Cancel** (guardians),
+**Freeze** and **Approve unfreeze**, rule changes with Approve / Cancel / Apply, and a proposal to
+replace a lost device. **Request funds** appears only when the connected account holds the
+registered device key; the contract checks the signing key either way.

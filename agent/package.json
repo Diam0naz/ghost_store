@@ -10,7 +10,8 @@
     "keeper": "tsx src/execute-auto.ts --watch",
     "sweep": "tsx src/sweep-revenue.ts",
     "attestation:serve": "tsx src/attestation-service.ts",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
     "@phala/dcap-qvl": "^0.7.1",

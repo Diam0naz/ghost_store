@@ -33,3 +33,15 @@ export async function nearAccount(): Promise<Account> {
   cached = await near.account(accountId);
   return cached;
 }
+
+/** Any account with a key from the environment (e.g. the keeper's vault key). */
+export async function accountFor(accountId: string, privateKey: string): Promise<Account> {
+  const network = process.env.NEAR_NETWORK ?? "testnet";
+  const nodeUrl =
+    process.env.NEAR_RPC_URL ??
+    (network === "mainnet" ? "https://rpc.mainnet.fastnear.com" : "https://rpc.testnet.fastnear.com");
+  const keyStore = new keyStores.InMemoryKeyStore();
+  await keyStore.setKey(network, accountId, KeyPair.fromString(privateKey as `ed25519:${string}`));
+  const near = await connect({ networkId: network, keyStore, nodeUrl });
+  return near.account(accountId);
+}

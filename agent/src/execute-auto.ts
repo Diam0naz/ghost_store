@@ -10,6 +10,12 @@
 //   ALERT_WEBHOOK_URL                      Slack or Discord incoming webhook
 //   TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID  Telegram bot message
 //   TREASURY_UI_URL                        link added to alerts, e.g. https://<app>/treasury
+//
+// Cold vault (optional, docs/COLD-VAULT.md):
+//   COLD_VAULT_ID                          alert guardians on requests, freezes and rule changes
+//   KEEPER_VAULT_ACCOUNT_ID + KEEPER_VAULT_PRIVATE_KEY
+//                                          a key that may call `release` on the vault, so the
+//                                          keeper pays due installments (else it only alerts)
 import { config } from "dotenv";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -17,7 +23,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../.env") });
 
 import type { Account } from "near-api-js";
-import { getEnv, nearAccount } from "./near.js";
+import { accountFor, getEnv, nearAccount } from "./near.js";
+import { vaultPass } from "./vault-watch.js";
 
 type Kind = Record<string, Record<string, unknown>>;
 
@@ -183,10 +190,42 @@ async function pass(account: Account, contractId: string): Promise<void> {
   }
 }
 
+/** The cold vault watch, if configured. Its failures never stop the treasury keeper. */
+async function makeVaultRound(viewer: Account): Promise<(() => Promise<void>) | null> {
+  const vaultId = process.env.COLD_VAULT_ID;
+  if (!vaultId) return null;
+  const id = process.env.KEEPER_VAULT_ACCOUNT_ID;
+  const key = process.env.KEEPER_VAULT_PRIVATE_KEY;
+  const releaser = id && key ? await accountFor(id, key) : null;
+  console.log(`Watching cold vault ${vaultId}; ${releaser ? `releasing due installments as ${id}` : "alerts only (no KEEPER_VAULT key)"}.`);
+  return async () => {
+    try {
+      await vaultPass({
+        viewer,
+        releaser,
+        vaultId,
+        alert: async (t) => {
+          console.log(t);
+          await sendAlert(t);
+        },
+        amount: (token, raw) => amountText(viewer, token, raw),
+        link: process.env.VAULT_UI_URL ?? process.env.TREASURY_UI_URL,
+      });
+    } catch (err) {
+      console.error(`vault pass failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+}
+
 async function main(): Promise<void> {
   const contractId = getEnv("TREASURY_CONTRACT_ID");
   const account = await nearAccount();
-  if (!WATCH) return pass(account, contractId);
+  const vaultRound = await makeVaultRound(account);
+  if (!WATCH) {
+    await pass(account, contractId);
+    if (vaultRound) await vaultRound();
+    return;
+  }
 
   const channels = [process.env.ALERT_WEBHOOK_URL && "webhook", process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID && "Telegram"].filter(Boolean);
   console.log(`Keeper watching ${contractId} every ${INTERVAL_MS / 1000} s; alerts: ${channels.join(", ") || "none (console only)"}. Ctrl+C to stop.`);
@@ -197,6 +236,7 @@ async function main(): Promise<void> {
       // An RPC hiccup must not stop the keeper; try again next round.
       console.error(`pass failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+    if (vaultRound) await vaultRound();
     await new Promise((r) => setTimeout(r, INTERVAL_MS));
   }
 }

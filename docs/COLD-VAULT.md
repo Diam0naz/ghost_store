@@ -99,9 +99,15 @@ near contract call-function as-transaction usdt.fakes.testnet storage_deposit \
 Revenue split: `SWEEP_VAULT_ID=vault.acme.near SWEEP_VAULT_SHARE=80 npm run sweep` (in `agent/`);
 the vault's share is sent with `ft_transfer_call` so the vault books it.
 
+## Keeper
+
+`npm run keeper` with `COLD_VAULT_ID` set alerts guardians (Slack, Discord or Telegram, as for
+the treasury) on every new request, cancellation, freeze, unfreeze and rule change, and again when
+a change's delay starts. With `KEEPER_VAULT_ACCOUNT_ID` and `KEEPER_VAULT_PRIVATE_KEY` (a
+function-call key for `release` on the vault) it also pays installments as they fall due;
+without them it only alerts, and anyone can call `release`. Tests: `npm test` in `agent/`.
+
 ## Next
 
-- **Keeper:** call `release` for due installments and alert guardians on every new request,
-  freeze and rule change (the delay is only as good as the alert).
 - **Web:** a vault page: balance, pending requests with Cancel, Freeze, and a "Request funds"
   form that only works when signed from the device.

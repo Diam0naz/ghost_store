@@ -3,9 +3,9 @@
 An AI treasurer for merchants. The AI reads the merchant's books privately inside a TEE, and the
 **contract** decides what it may do. Built at NEAR HACKATHON (Nov 1–14, 2026).
 
-> **Status (2026-11-11).** v2 is deployed on NEAR testnet at `vault2.treasury-dev.testnet`:
+> **Status (2026-11-19).** v2 is deployed on NEAR testnet at `vault2.treasury-dev.testnet`:
 > AI proposals whose NEAR AI TEE signature is verified by the contract, a bounded autonomy lane,
-> agent-to-agent invoices and invoice NFTs with a factoring fee. Two invoices were paid by the
+> agent-to-agent invoices and invoice NFTs with a factoring fee. Three invoices were paid by the
 > autonomy lane with no signer approval (see [What is proven on testnet](#what-is-proven-on-testnet-v2)).
 > 101 contract unit tests, one using a real NEAR AI Cloud TEE signature. The checkout settled a real
 > mainnet payment through NEAR Intents on 2026-11-12 (see
@@ -75,8 +75,10 @@ Agent Economy · NFTs That Do Something
    (65 of the 100 USDT daily cap). The treasury page shows a countdown and a **Veto** button.
    The new supplier is not allowlisted, so its invoice waits for 2-of-2 approval.
    Meanwhile the vendor can sell an invoice on `/invoices`; the buyer then receives the payment.
-4. After the 5-minute window, `npm run execute-auto` (or **Execute payout** in the UI; anyone can
-   call it) pays the vendors. Pause, a vendor removal or a breached reserve floor stops it.
+4. After the 5-minute window, the keeper pays the vendors: `npm run keeper` runs continuously and
+   also alerts the signers (Slack, Discord or Telegram) as soon as a payout enters its veto window.
+   `npm run execute-auto` does one pass, and **Execute payout** in the UI works too; anyone can
+   call it. Pause, a vendor removal or a breached reserve floor stops it.
 
 ## Proven on mainnet: checkout via NEAR Intents
 
@@ -113,9 +115,10 @@ payout, 100 USDT per UTC day, 5-minute veto window, invoices only), 0.5% factori
 | Keeper calls `execute_auto` after the veto window | #7, #8 | `Executed` with **zero approvals**; vendors hold 40 and 25 USDT, invoices `Paid` |
 | An early agent proposed a raw payout for a bill that had an invoice | #9 `Payout` 120 to fabric-mill | Not allowlisted, so no autonomy; signers `Rejected` it. The agent now reconciles bills and invoices deterministically before inference |
 | New supplier's invoice, not allowlisted | #10 `PayInvoice` for #2 FM-0042 (120) | AI proposed it from a fresh TEE-signed completion; `Executed` after **2-of-2** approval; invoice `Paid` |
+| Demo run (2026-11-13): vendor agent bills PKG-2310 | invoice #5 PKG-2310 (35), #11 `PayInvoice` | TEE signature verified, autonomy lane; `Executed` after the veto window with **zero approvals**; invoice `Paid` |
 | Invoice that matches no bill | #3 FM-0099 (45) | `Open`; never proposed |
 
-Vault balance after: 215 USDT (400 − 40 − 25 − 120).
+Vault balance after: 180 USDT (400 − 40 − 25 − 120 − 35).
 
 ## What is proven on testnet (v1)
 
@@ -163,7 +166,7 @@ anyone: execute_auto after the veto window
   yield layer (venue caps, total cap, reserve floor, pause), v1→v2 `migrate`. 101 unit tests.
 - `contracts/mock-venue`: venue stub (`ft_on_transfer` + `withdraw`); records principal, earns no yield.
 - `agent`: `propose` (books → TEE model → `propose_attested`), `register-model` (TDX quote check,
-  `SetModelSigner` proposal), `execute-auto` (permissionless keeper), `scripts/testnet-v2-setup.mjs`.
+  `SetModelSigner` proposal), `keeper` / `execute-auto` (permissionless keeper with veto-window alerts), `scripts/testnet-v2-setup.mjs`.
 - `web`: Next.js app: treasury (on-chain proof, autonomy budget, veto/execute, "Needs you"),
   invoices (submit, sell, buy, propose payment), dashboard, checkout and flows. Read-only without
   a wallet; actions are signed with a NEAR wallet.

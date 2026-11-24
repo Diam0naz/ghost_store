@@ -7,6 +7,7 @@
     "propose": "tsx src/propose.ts",
     "register-model": "tsx src/register-model.ts",
     "execute-auto": "tsx src/execute-auto.ts",
+    "keeper": "tsx src/execute-auto.ts --watch",
     "attestation:serve": "tsx src/attestation-service.ts",
     "typecheck": "tsc --noEmit -p ."
   },

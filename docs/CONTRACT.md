@@ -10,9 +10,11 @@ Everything below was checked against the source in this repo and, where marked, 
 deployed contracts on NEAR testnet (state read on 2026-11-04). Anything not exercised on chain is
 listed as untested rather than implied to work.
 
-> **Deployment status (2026-11-10):** `vault.treasury-dev.testnet` still runs **v1** (no
-> attested proposals, no autonomy lane). The v2 code in this repo is unit-tested but not yet
-> deployed. Upgrade steps: [Upgrading testnet to v2](#upgrading-testnet-to-v2).
+> **Deployment status (2026-11-19):** v2 runs on testnet as a fresh treasury,
+> `vault2.treasury-dev.testnet` (attested proposals, autonomy lane, invoice NFTs). The original
+> `vault.treasury-dev.testnet` still runs **v1**; the v1 tables below refer to it. Results on v2:
+> [README, What is proven on testnet (v2)](../README.md#what-is-proven-on-testnet-v2). Upgrade steps:
+> [Upgrading testnet to v2](#upgrading-testnet-to-v2).
 
 ## Deployed contracts (testnet)
 

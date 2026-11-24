@@ -7,9 +7,9 @@
 //! exactly where a NEP-141 transfer would deliver them.
 //!
 //! The wasm sandbox cannot run on this host (near-sandbox 2.14.0 requires GLIBC 2.38+), so this
-//! is the closest thing to an on-chain cycle available here. `allocation_cycle_should_book_the_
-//! principal_on_both_sides` is the correct end state; it is `#[ignore]`d because the treasury
-//! currently reads the NEP-141 result backwards (see the test below it and the ledger audit).
+//! is the closest thing to an on-chain cycle available here. The token is modelled in two steps:
+//! the venue's `ft_on_transfer` returns its refund, and `ft_resolve_transfer` turns that into the
+//! amount used, which is what `ft_transfer_call` resolves to and the treasury's callback reads.
 //!
 //! Lives in the venue crate rather than `treasury/tests/` so the venue's deployable wasm stays
 //! `cdylib`-only: adding `rlib` to its crate-type grows the artifact from ~100 KB to ~144 KB.
@@ -160,53 +160,61 @@ fn token_deposits(v: &mut MockVenue, amount: u128) -> U128 {
     }
 }
 
-// ---- the cycle as it runs today ---------------------------------------------
+/// The token's `ft_resolve_transfer` step (NEP-141): `ft_transfer_call` resolves to the amount
+/// the receiver USED, i.e. `amount - refund`, and that is what the treasury's callback receives.
+fn token_resolves(amount: u128, refund: U128) -> u128 {
+    amount - refund.0.min(amount)
+}
+
+// ---- the allocation cycle ----------------------------------------------------
 
 #[test]
-fn allocation_cycle_deposits_at_the_venue_and_drops_the_treasury_position() {
+fn allocation_cycle_books_the_principal_on_both_sides() {
     let (mut t, mut v) = setup();
 
     let id = allocate(&mut t, 200);
+    let refund = token_deposits(&mut v, 200);
+    assert_eq!(refund, U128(0), "the mock venue keeps everything");
+
+    tcb(ok_u128(token_resolves(200, refund)));
+    t.on_allocate_complete(id, venue(), U128(200));
+
     assert_eq!(t.get_proposal(id).unwrap().status, Status::Executed);
     assert_eq!(t.get_positions(), vec![(venue(), U128(200))]);
     assert_eq!(t.get_total_allocated(), U128(200));
-
-    // ft_transfer_call: the 200 leave the vault and land on the venue's books.
-    let refund = token_deposits(&mut v, 200);
-    assert_eq!(refund, U128(0), "the mock venue keeps everything");
     assert_eq!(v.balance_of(vault()), U128(200));
+    assert_eq!(t.get_outflow_in_flight(), U128(0));
+}
 
-    // The token forwards that 0 into the treasury's callback.
-    tcb(ok_u128(refund.0));
+#[test]
+fn allocation_cycle_books_only_what_the_venue_kept() {
+    // A venue that refunds 50 of 200: the token resolves to 150 used.
+    let (mut t, _v) = setup();
+    let id = allocate(&mut t, 200);
+    tcb(ok_u128(token_resolves(200, U128(50))));
     t.on_allocate_complete(id, venue(), U128(200));
 
-    // KNOWN BUG, kept as an executable record rather than fixed here: `ft_transfer_call`
-    // resolves to the amount the venue did NOT use (the refund), but the treasury reads it as
-    // the amount kept. A full-keep deposit (refund 0) is therefore booked as a full refund.
-    assert_eq!(
-        t.get_positions(),
-        vec![],
-        "the treasury wrote off the 200 it just supplied"
-    );
-    assert_eq!(t.get_total_allocated(), U128(0));
-    assert_eq!(
-        t.get_proposal(id).unwrap().status,
-        Status::Failed,
-        "a successful deposit is marked Failed"
-    );
+    assert_eq!(t.get_proposal(id).unwrap().status, Status::Executed);
+    assert_eq!(t.get_positions(), vec![(venue(), U128(150))]);
+    assert_eq!(t.get_total_allocated(), U128(150));
+}
 
-    // Both sides of the same deposit, now disagreeing.
-    assert_eq!(
-        v.balance_of(vault()),
-        U128(200),
-        "the venue holds the principal that the treasury no longer tracks"
-    );
+#[test]
+fn allocation_cycle_refused_by_the_venue_is_failed_and_written_off() {
+    // A venue that refunds everything: the token resolves to 0 used.
+    let (mut t, _v) = setup();
+    let id = allocate(&mut t, 200);
+    tcb(ok_u128(token_resolves(200, U128(200))));
+    t.on_allocate_complete(id, venue(), U128(200));
+
+    assert_eq!(t.get_proposal(id).unwrap().status, Status::Failed);
+    assert_eq!(t.get_positions(), vec![]);
+    assert_eq!(t.get_total_allocated(), U128(0));
 }
 
 #[test]
 fn stale_position_withdraw_cycle_pays_zero_and_keeps_the_principal() {
-    // A position the venue has no record of: exactly the state a full refund (or the refund bug
-    // above) leaves behind. The withdraw must not panic and must not write anything off.
+    // A position the venue has no record of: e.g. after the venue lost or reset its books. The withdraw must not panic and must not write anything off.
     let (mut t, mut v) = setup();
     let id = allocate(&mut t, 200);
     tcb(ok_u128(200));
@@ -238,24 +246,4 @@ fn stale_position_withdraw_cycle_pays_zero_and_keeps_the_principal() {
         "nothing was written off"
     );
     assert!(v.list_balances().is_empty(), "the venue still owes nothing");
-}
-
-// ---- the cycle the contracts are supposed to run ----------------------------
-
-#[test]
-#[ignore = "treasury reads ft_transfer_call's refund as the amount kept; see the ledger audit"]
-fn allocation_cycle_should_book_the_principal_on_both_sides() {
-    let (mut t, mut v) = setup();
-
-    let id = allocate(&mut t, 200);
-    let refund = token_deposits(&mut v, 200);
-
-    tcb(ok_u128(refund.0));
-    t.on_allocate_complete(id, venue(), U128(200));
-
-    // A venue that kept everything returns 0, so the treasury must keep its position.
-    assert_eq!(t.get_proposal(id).unwrap().status, Status::Executed);
-    assert_eq!(t.get_positions(), vec![(venue(), U128(200))]);
-    assert_eq!(t.get_total_allocated(), U128(200));
-    assert_eq!(v.balance_of(vault()), U128(200));
 }

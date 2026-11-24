@@ -2,9 +2,10 @@
 
 `contracts/treasury` — Rust, near-sdk 5 (`unstable` feature, for `env::ecrecover`). 101 unit tests
 (`cd contracts/treasury && cargo test`, 101 passed / 0 failed when last run), including one that
-verifies a real NEAR AI Cloud TEE signature (`src/real_vectors.rs`). Three cross-contract cycle tests (treasury + venue, driven
-in-process) live in `contracts/mock-venue/src/e2e_cycle_tests.rs`: 2 pass, 1 is ignored because
-it asserts the correct allocation accounting and fails against the current code.
+verifies a real NEAR AI Cloud TEE signature (`src/real_vectors.rs`). Four cross-contract cycle tests (treasury + venue, driven
+in-process) live in `contracts/mock-venue/src/e2e_cycle_tests.rs`; all pass. They model the token's
+`ft_resolve_transfer` step: `ft_transfer_call` resolves to the amount the venue kept, which is what
+`on_allocate_complete` reads (full keep, partial refund and full refund are covered).
 
 Everything below was checked against the source in this repo and, where marked, against the
 deployed contracts on NEAR testnet (state read on 2026-11-04). Anything not exercised on chain is

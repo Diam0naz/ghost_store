@@ -9,6 +9,7 @@
 //   npm run sweep -- --execute     # signs ft_withdraw with the merchant's key (mainnet funds)
 //
 // Env: MERCHANT_ACCOUNT_ID (default diamonaz.near), SWEEP_TREASURY_ID (the mainnet treasury),
+// SWEEP_VAULT_ID + SWEEP_VAULT_SHARE (cold vault and its percent, default 80; docs/COLD-VAULT.md),
 // SWEEP_TOKEN (default native USDC on NEAR), SWEEP_KEEP (base units to leave behind, default 0),
 // MERCHANT_PRIVATE_KEY (only for --execute; a key on the merchant account).
 import { config } from "dotenv";
@@ -73,15 +74,32 @@ async function main(): Promise<void> {
     return;
   }
 
-  // The treasury must be registered with the token or ft_withdraw's transfer fails and refunds.
-  const reg = await view<{ total: string } | null>(token, "storage_balance_of", { account_id: treasury });
-  if (!reg) {
-    throw new Error(`${treasury} is not registered with ${token}: call storage_deposit for it first.`);
+  // Split: SWEEP_VAULT_SHARE percent goes to the cold vault, the rest to the operating treasury.
+  const vault = process.env.SWEEP_VAULT_ID ?? "";
+  const share = BigInt(process.env.SWEEP_VAULT_SHARE ?? (vault ? "80" : "0"));
+  if (share < 0n || share > 100n) throw new Error("SWEEP_VAULT_SHARE must be 0-100");
+  if (share > 0n && !vault) throw new Error("SWEEP_VAULT_SHARE is set but SWEEP_VAULT_ID is not");
+  const toVault = (amount * share) / 100n;
+  const toTreasury = amount - toVault;
+
+  // Each receiver must be registered with the token or ft_withdraw's transfer fails and refunds.
+  for (const r of [toTreasury > 0n && treasury, toVault > 0n && vault].filter(Boolean) as string[]) {
+    const reg = await view<{ total: string } | null>(token, "storage_balance_of", { account_id: r });
+    if (!reg) throw new Error(`${r} is not registered with ${token}: call storage_deposit for it first.`);
   }
 
-  const args = { token, receiver_id: treasury, amount: amount.toString() };
-  console.log(`Plan: ${INTENTS}.ft_withdraw(${JSON.stringify(args)}) with 1 yoctoNEAR, signed by ${merchant}.`);
-  console.log(`Moves ${fmt(amount, meta.decimals)} ${meta.symbol} to ${treasury}.`);
+  // The vault books deposits in ft_on_transfer, so its share goes as ft_transfer_call (a msg).
+  const calls = [
+    ...(toTreasury > 0n ? [{ to: treasury, args: { token, receiver_id: treasury, amount: toTreasury.toString() } }] : []),
+    ...(toVault > 0n ? [{ to: vault, args: { token, receiver_id: vault, amount: toVault.toString(), msg: "deposit" } }] : []),
+  ];
+  for (const c of calls) {
+    console.log(`Plan: ${INTENTS}.ft_withdraw(${JSON.stringify(c.args)}) with 1 yoctoNEAR, signed by ${merchant}.`);
+  }
+  console.log(
+    `Moves ${fmt(toTreasury, meta.decimals)} ${meta.symbol} to ${treasury}` +
+      (toVault > 0n ? ` and ${fmt(toVault, meta.decimals)} ${meta.symbol} (${share}%) to the cold vault ${vault}.` : ".")
+  );
   if (!EXECUTE) {
     console.log("Dry run. Re-run with --execute to sign it.");
     return;
@@ -93,14 +111,16 @@ async function main(): Promise<void> {
   await keyStore.setKey("mainnet", merchant, KeyPair.fromString(key as `ed25519:${string}`));
   const near = await connect({ networkId: "mainnet", keyStore, nodeUrl: RPC });
   const account = await near.account(merchant);
-  const out = await account.functionCall({
-    contractId: INTENTS,
-    methodName: "ft_withdraw",
-    args,
-    gas: 100_000_000_000_000n,
-    attachedDeposit: 1n,
-  });
-  console.log(`Swept. Tx ${out.transaction.hash}`);
+  for (const c of calls) {
+    const out = await account.functionCall({
+      contractId: INTENTS,
+      methodName: "ft_withdraw",
+      args: c.args,
+      gas: 100_000_000_000_000n,
+      attachedDeposit: 1n,
+    });
+    console.log(`Swept to ${c.to}. Tx ${out.transaction.hash}`);
+  }
 }
 
 main().catch((err: unknown) => {

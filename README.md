@@ -181,6 +181,7 @@ anyone: execute_auto after the veto window
 - `web`: Next.js app: treasury (on-chain proof, autonomy budget, veto/execute, "Needs you"),
   invoices (submit, sell, buy, propose payment), dashboard, checkout and flows. Read-only without
   a wallet; actions are signed with a NEAR wallet.
+- `contracts/cold-vault`: savings vault: only a registered device can request funds, after a delay, in installments, to the operating treasury; any guardian can cancel or freeze. 18 unit tests. Design: [`COLD-VAULT.md`](docs/COLD-VAULT.md).
 - `contracts/factory`: creates a treasury per merchant from a global contract (by code hash), with a mainnet payout account for checkout. 19 unit tests.
 - Docs: [`CONTRACT.md`](docs/CONTRACT.md), [`ATTESTATION.md`](docs/ATTESTATION.md), [`FACTORY.md`](docs/FACTORY.md), [`PLAN.md`](docs/PLAN.md).
 

@@ -5,4 +5,5 @@ export const NAV: { href: string; label: string; match?: string }[] = [
   { href: "/invoices", label: "Invoices" },
   { href: "/checkout/demo", label: "Checkout", match: "/checkout" },
   { href: "/flows", label: "Flows" },
+  { href: "/onboard", label: "Get started" },
 ];

@@ -41,6 +41,13 @@ Most AI-treasury projects pair an AI that drafts proposals with a multisig, and 
 A TEE signature proves which model wrote a proposal, not that it is a good idea. So it only buys
 the AI a small, capped amount of autonomy. That design is the main idea of the project.
 
+### For merchants
+
+`/onboard` creates a shop's own treasury in one transaction through a factory contract
+(`<shop>.<factory>`), then applies spending limits, regular vendors and the AI model key as
+governance proposals. Code and tests are in the repo; the factory is not deployed yet. See
+[`docs/FACTORY.md`](docs/FACTORY.md).
+
 ### For agent builders
 
 The same contract is a wallet any agent can be trusted with: decisions verified on chain,
@@ -173,7 +180,8 @@ anyone: execute_auto after the veto window
 - `web`: Next.js app: treasury (on-chain proof, autonomy budget, veto/execute, "Needs you"),
   invoices (submit, sell, buy, propose payment), dashboard, checkout and flows. Read-only without
   a wallet; actions are signed with a NEAR wallet.
-- Docs: [`CONTRACT.md`](docs/CONTRACT.md), [`ATTESTATION.md`](docs/ATTESTATION.md), [`PLAN.md`](docs/PLAN.md).
+- `contracts/factory`: creates a treasury per merchant from a global contract (by code hash). 15 unit tests.
+- Docs: [`CONTRACT.md`](docs/CONTRACT.md), [`ATTESTATION.md`](docs/ATTESTATION.md), [`FACTORY.md`](docs/FACTORY.md), [`PLAN.md`](docs/PLAN.md).
 
 ## Limits (honest about what this does not do)
 

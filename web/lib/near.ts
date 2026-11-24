@@ -21,8 +21,52 @@ export const RPC_URL =
     ? "https://rpc.mainnet.fastnear.com"
     : "https://rpc.testnet.fastnear.com");
 
-export const TREASURY_CONTRACT_ID =
-  process.env.NEXT_PUBLIC_TREASURY_CONTRACT_ID ?? "";
+/** The demo treasury the site shows by default. */
+export const DEFAULT_TREASURY_ID = process.env.NEXT_PUBLIC_TREASURY_CONTRACT_ID ?? "";
+/** Factory that creates merchant treasuries as `<name>.<factory>`. */
+export const FACTORY_CONTRACT_ID = process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID ?? "";
+
+const SHOP_KEY = "ghost.shop";
+
+/** Only the demo treasury or a shop the factory created may be selected, so a crafted
+ * `?shop=` link cannot point the signer's wallet at an arbitrary contract. */
+export function isAllowedShop(id: string): boolean {
+  if (id === DEFAULT_TREASURY_ID) return true;
+  if (!FACTORY_CONTRACT_ID || !id.endsWith(`.${FACTORY_CONTRACT_ID}`)) return false;
+  return /^[a-z0-9][a-z0-9_-]{0,30}[a-z0-9]$/.test(id.slice(0, -FACTORY_CONTRACT_ID.length - 1));
+}
+
+/** Browser only: `?shop=<treasury>` (remembered) or the remembered shop, else the demo. */
+function resolveTreasury(): string {
+  if (typeof window === "undefined") return DEFAULT_TREASURY_ID;
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("shop");
+    if (fromUrl && isAllowedShop(fromUrl)) {
+      window.localStorage.setItem(SHOP_KEY, fromUrl);
+      return fromUrl;
+    }
+    const saved = window.localStorage.getItem(SHOP_KEY);
+    if (saved && isAllowedShop(saved)) return saved;
+  } catch {
+    // Storage blocked: fall back to the demo treasury.
+  }
+  return DEFAULT_TREASURY_ID;
+}
+
+/** The treasury this browser is looking at: the demo, or a merchant's shop. Fixed for the
+ * page's lifetime; `switchShop` reloads to change it. */
+export const TREASURY_CONTRACT_ID = resolveTreasury();
+
+/** Select a merchant's treasury (or `null` for the demo) and reload into it. */
+export function switchShop(id: string | null, path = "/treasury"): void {
+  try {
+    if (id && isAllowedShop(id)) window.localStorage.setItem(SHOP_KEY, id);
+    else window.localStorage.removeItem(SHOP_KEY);
+  } catch {
+    // Without storage, the ?shop= link below still selects it for this visit.
+  }
+  window.location.href = id ? `${path}?shop=${encodeURIComponent(id)}` : path;
+}
 
 // Hard safety rule #1: single source of truth for network + account id validation.
 // Only wired in below for view calls / transactions that will actually run on chain;

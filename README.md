@@ -99,7 +99,10 @@ Check it yourself: `GET https://1click.chaindefuser.com/v0/status?depositAddress
 or call `mt_balance_of` on `intents.near` for `diamonaz.near`.
 
 Not yet connected: the funds land in the merchant's Intents balance, not in the testnet treasury
-contract. Moving settled checkout revenue into a mainnet treasury is the next step.
+contract. `npm run sweep` (in `agent/`) moves that balance into a treasury with
+`intents.near::ft_withdraw`; it is a dry run unless given `--execute`, and needs a mainnet treasury
+(`SWEEP_TREASURY_ID`), which is not deployed yet. The **Flows** page lists settled checkout payments
+live from the 1Click status API.
 
 ## What is proven on testnet (v2)
 
@@ -166,7 +169,7 @@ anyone: execute_auto after the veto window
   yield layer (venue caps, total cap, reserve floor, pause), v1→v2 `migrate`. 101 unit tests.
 - `contracts/mock-venue`: venue stub (`ft_on_transfer` + `withdraw`); records principal, earns no yield.
 - `agent`: `propose` (books → TEE model → `propose_attested`), `register-model` (TDX quote check,
-  `SetModelSigner` proposal), `keeper` / `execute-auto` (permissionless keeper with veto-window alerts), `scripts/testnet-v2-setup.mjs`.
+  `SetModelSigner` proposal), `keeper` / `execute-auto` (permissionless keeper with veto-window alerts), `sweep` (checkout revenue into the treasury), `scripts/testnet-v2-setup.mjs`.
 - `web`: Next.js app: treasury (on-chain proof, autonomy budget, veto/execute, "Needs you"),
   invoices (submit, sell, buy, propose payment), dashboard, checkout and flows. Read-only without
   a wallet; actions are signed with a NEAR wallet.

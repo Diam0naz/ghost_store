@@ -8,6 +8,7 @@
     "register-model": "tsx src/register-model.ts",
     "execute-auto": "tsx src/execute-auto.ts",
     "keeper": "tsx src/execute-auto.ts --watch",
+    "sweep": "tsx src/sweep-revenue.ts",
     "attestation:serve": "tsx src/attestation-service.ts",
     "typecheck": "tsc --noEmit -p ."
   },

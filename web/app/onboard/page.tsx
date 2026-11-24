@@ -18,8 +18,12 @@ import {
   useNameAvailable,
   useShop,
   validShopName,
+  validPayoutAccount,
+  setPayoutAccount,
+  checkoutLink,
   ONE_NEAR,
 } from "@/lib/factory";
+import CopyButton from "@/components/CopyButton";
 
 const PENDING_KEY = "ghost.onboard.pending";
 const STABLE_TOKEN = process.env.NEXT_PUBLIC_STABLE_TOKEN ?? "usdt.fakes.testnet";
@@ -68,6 +72,9 @@ export default function OnboardPage() {
   const [coSigners, setCoSigners] = useState("");
   const [threshold, setThreshold] = useState(1);
   const [depositNear, setDepositNear] = useState(1);
+  const [payout, setPayout] = useState("");
+  const [payoutEdit, setPayoutEdit] = useState("");
+  const [payoutBusy, setPayoutBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,6 +116,8 @@ export default function OnboardPage() {
   const badVendor = vendorList.find((s) => !s.endsWith(".testnet"));
   useEffect(() => setThreshold((t) => Math.min(Math.max(t, 1), Math.max(signers.length, 1))), [signers.length]);
 
+  const payoutTrim = payout.trim();
+  const badPayout = payoutTrim !== "" && !validPayoutAccount(payoutTrim);
   const minNear = config.data ? Number(BigInt(config.data.min_deposit) * 1000n / ONE_NEAR) / 1000 : 0.5;
   const canCreate =
     !!accountId &&
@@ -116,6 +125,7 @@ export default function OnboardPage() {
     validShopName(name) &&
     available.data === true &&
     !badSigner &&
+    !badPayout &&
     depositNear >= minNear &&
     !busy;
 
@@ -138,7 +148,14 @@ export default function OnboardPage() {
     }
     setPending(treasury);
     try {
-      await createShop({ name, displayName: displayName.trim(), signers, threshold, depositNear });
+      await createShop({
+        name,
+        displayName: displayName.trim(),
+        signers,
+        threshold,
+        depositNear,
+        payoutAccount: payoutTrim || null,
+      });
     } catch (e) {
       setError(errorText(e));
       setPending(null);
@@ -164,6 +181,21 @@ export default function OnboardPage() {
     } catch (e) {
       setError(errorText(e));
       setSetupState("idle");
+    }
+  }
+
+  async function onSavePayout() {
+    if (!pending) return;
+    setError(null);
+    setPayoutBusy(true);
+    try {
+      await setPayoutAccount(pending, payoutEdit.trim() || null);
+      await shop.refetch();
+      setPayoutEdit("");
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setPayoutBusy(false);
     }
   }
 
@@ -290,6 +322,20 @@ export default function OnboardPage() {
                 {badSigner ? `${badSigner} is not a testnet account.` : "People who can approve, reject, veto and pause."}
               </span>
             </label>
+            <label className="block">
+              <span className="mb-1 block font-medium text-ink-900">Where customers' payments go (optional)</span>
+              <input
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 font-mono"
+                value={payout}
+                onChange={(e) => setPayout(e.target.value.toLowerCase())}
+                placeholder="yourshop.near"
+              />
+              <span className="mt-1 block text-xs text-ink-400">
+                {badPayout
+                  ? "Use a mainnet account ending in .near (customer payments settle on mainnet)."
+                  : "A mainnet NEAR account. Checkout settles customers' payments to it in USDC; it needs no NEAR balance. Only you can change it later."}
+              </span>
+            </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block font-medium text-ink-900">Approvals needed</span>
@@ -387,6 +433,43 @@ export default function OnboardPage() {
           <p className="text-sm text-ink-400">Available once your treasury is live.</p>
         ) : (
           <div className="space-y-3 text-sm text-ink-600">
+            <div className="rounded-lg border border-line bg-primary-50/50 p-3">
+              <p className="font-medium text-ink-900">Take payments</p>
+              {shop.data?.payout_account ? (
+                <>
+                  <p className="mt-1 text-xs">
+                    Customers pay in any token; you receive USDC at{" "}
+                    <span className="font-mono text-ink-900">{shop.data.payout_account}</span> (mainnet).
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 font-mono text-xs text-ink-900">
+                      {checkoutLink(pending!)}
+                    </code>
+                    <CopyButton value={checkoutLink(pending!)} />
+                  </div>
+                </>
+              ) : (
+                <p className="mt-1 text-xs">No payout account yet, so checkout is off for this shop.</p>
+              )}
+              {shop.data?.created_by === accountId && (
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 font-mono text-xs"
+                    value={payoutEdit}
+                    onChange={(e) => setPayoutEdit(e.target.value.toLowerCase())}
+                    placeholder={shop.data?.payout_account ? "new payout account (.near)" : "yourshop.near"}
+                  />
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={payoutBusy || (payoutEdit.trim() !== "" && !validPayoutAccount(payoutEdit.trim())) || (payoutEdit.trim() === "" && !shop.data?.payout_account)}
+                    onClick={onSavePayout}
+                  >
+                    {payoutBusy ? "Confirm in wallet…" : payoutEdit.trim() ? "Save payout account" : "Turn off checkout"}
+                  </button>
+                </div>
+              )}
+            </div>
             <ul className="space-y-2">
               <li>
                 <span className="font-medium text-ink-900">Fund it:</span> send {STABLE_TOKEN} to{" "}

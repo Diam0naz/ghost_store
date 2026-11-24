@@ -43,20 +43,24 @@ import {
   subscribeAccountId,
   sendActions,
   TREASURY_CONTRACT_ID,
+  DEFAULT_TREASURY_ID,
   NETWORK,
 } from "@/lib/near";
+import { useShop } from "@/lib/factory";
 
 const JWT = process.env.NEXT_PUBLIC_INTENTS_JWT;
 
-// Destination: USDC on NEAR. Credit the merchant's treasury account so the
-// settled funds sit where the treasury contract can spend them.
+// Destination: USDC on NEAR, credited to the merchant. The demo shop pays the account configured
+// below; an onboarded shop (?shop=<treasury>) pays the mainnet payout account in its factory
+// record, inside the Intents ledger (no NEAR or storage deposit needed on that account).
 const DESTINATION_ASSET =
   process.env.NEXT_PUBLIC_INTENTS_DESTINATION_ASSET ??
   "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
-const RECIPIENT =
-  process.env.NEXT_PUBLIC_INTENTS_RECIPIENT ?? TREASURY_CONTRACT_ID;
-const RECIPIENT_TYPE =
+const DEMO_RECIPIENT =
+  process.env.NEXT_PUBLIC_INTENTS_RECIPIENT ?? DEFAULT_TREASURY_ID;
+const DEMO_RECIPIENT_TYPE =
   process.env.NEXT_PUBLIC_INTENTS_RECIPIENT_TYPE ?? "DESTINATION_CHAIN";
+const IS_SHOP = TREASURY_CONTRACT_ID !== DEFAULT_TREASURY_ID;
 
 // Asset we quote for native NEAR payments (funds are wrapped before deposit).
 const NEAR_WRAPPED_ASSET_ID = "nep141:wrap.near";
@@ -230,6 +234,16 @@ export default function CheckoutPage() {
   // NEAR Intents only settles on mainnet. A *.testnet recipient or refund
   // address gets rejected by the quote service with a bare "Internal server
   // error", so catch it here and say something useful instead.
+  // Who gets paid. Resolved after mount: the selected shop lives in the browser, so the server
+  // render must not show the demo merchant for a shop's checkout.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const shop = useShop(IS_SHOP ? TREASURY_CONTRACT_ID : null);
+  const RECIPIENT = !mounted ? "" : IS_SHOP ? shop.data?.payout_account ?? "" : DEMO_RECIPIENT;
+  const RECIPIENT_TYPE = IS_SHOP ? "INTENTS" : DEMO_RECIPIENT_TYPE;
+  const shopName = mounted && IS_SHOP ? shop.data?.display_name ?? null : null;
+  const recipientLoading = !mounted || (IS_SHOP && shop.isPending);
+
   const isTestnetAccount = (account: string) => account.endsWith(".testnet");
   const recipientOk = !!RECIPIENT && !isTestnetAccount(RECIPIENT);
   const refundOk = !refundAddress || !isTestnetAccount(refundAddress);
@@ -247,7 +261,7 @@ export default function CheckoutPage() {
       recipientType: RECIPIENT_TYPE,
       slippageTolerance: 100,
     };
-  }, [token.assetId, amountRaw, refundAddress, recipientOk, refundOk]);
+  }, [token.assetId, amountRaw, refundAddress, recipientOk, refundOk, RECIPIENT, RECIPIENT_TYPE]);
 
   const dry = useDryQuote(quoteParams, JWT);
   const status = useSwapStatus(depositAddress, JWT);
@@ -380,6 +394,7 @@ export default function CheckoutPage() {
               className="truncate font-mono text-xs font-semibold text-primary-800"
               title={RECIPIENT || undefined}
             >
+              {shopName ? `${shopName} · ` : ""}
               {formatAccount(RECIPIENT)}
             </span>
           </div>
@@ -424,10 +439,12 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {!recipientOk && (
+        {!recipientOk && !recipientLoading && (
           <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">
             {RECIPIENT
               ? "This checkout can't take payments yet — the merchant's payout account is on testnet and the swap service settles on mainnet."
+              : IS_SHOP
+              ? "This shop hasn't set a payout account yet, so it can't take payments."
               : "This checkout isn't linked to a merchant payout account yet."}
           </p>
         )}

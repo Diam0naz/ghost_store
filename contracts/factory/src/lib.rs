@@ -53,6 +53,9 @@ pub struct Shop {
     pub proposer: AccountId,
     pub created_at_ms: u64,
     pub status: ShopStatus,
+    /// Mainnet NEAR account that checkout pays (NEAR Intents settles on mainnet only, while
+    /// shops run on testnet). `None` until the merchant sets one; checkout is off without it.
+    pub payout_account: Option<String>,
 }
 
 #[near(serializers = [json])]
@@ -73,6 +76,14 @@ pub struct Factory {
     default_proposer: AccountId,
     shops: IterableMap<AccountId, Shop>,
     by_owner: LookupMap<AccountId, Vec<AccountId>>,
+}
+
+/// A mainnet NEAR account checkout can pay: a named `.near` account or a 64-hex implicit one.
+pub fn valid_payout_account(id: &str) -> bool {
+    if id.len() == 64 && id.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)) {
+        return true;
+    }
+    id.ends_with(".near") && id.parse::<AccountId>().is_ok()
 }
 
 /// Lowercase letters, digits, `-` and `_`, 2 to 32 characters, no leading or trailing separator.
@@ -108,6 +119,7 @@ impl Factory {
         signers: Vec<AccountId>,
         threshold: u32,
         display_name: String,
+        payout_account: Option<String>,
     ) -> Promise {
         let creator = env::predecessor_account_id();
         let deposit = env::attached_deposit();
@@ -115,6 +127,9 @@ impl Factory {
         require!(valid_shop_name(&name), "name: 2-32 lowercase letters, digits, - or _");
         let display_name = display_name.trim().to_string();
         require!(!display_name.is_empty() && display_name.len() <= 64, "display name: 1-64 characters");
+        if let Some(p) = &payout_account {
+            require!(valid_payout_account(p), "payout account must be a mainnet .near or implicit account");
+        }
 
         let mut uniq: Vec<AccountId> = Vec::new();
         for s in signers {
@@ -144,6 +159,7 @@ impl Factory {
                 proposer: self.default_proposer.clone(),
                 created_at_ms: env::block_timestamp_ms(),
                 status: ShopStatus::Creating,
+                payout_account,
             },
         );
 
@@ -195,6 +211,24 @@ impl Factory {
                 false
             }
         }
+    }
+
+    /// Set or clear the mainnet account checkout pays. Only the shop's creator may change it, so
+    /// one co-signer alone cannot redirect the shop's revenue; every change is logged.
+    pub fn set_payout_account(&mut self, treasury: AccountId, payout_account: Option<String>) {
+        let caller = env::predecessor_account_id();
+        let shop = self.shops.get_mut(&treasury).unwrap_or_else(|| env::panic_str("no such shop"));
+        require!(shop.status == ShopStatus::Active, "shop is not active yet");
+        require!(caller == shop.created_by, "only the shop's creator can change its payout account");
+        if let Some(p) = &payout_account {
+            require!(valid_payout_account(p), "payout account must be a mainnet .near or implicit account");
+        }
+        env::log_str(&format!(
+            "payout account for {treasury}: {} -> {}",
+            shop.payout_account.as_deref().unwrap_or("none"),
+            payout_account.as_deref().unwrap_or("none")
+        ));
+        shop.payout_account = payout_account;
     }
 
     // ---- owner -----------------------------------------------------------------

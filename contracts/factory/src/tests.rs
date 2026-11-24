@@ -55,7 +55,7 @@ fn setup() -> Factory {
 
 fn create(f: &mut Factory, who: AccountId, name: &str, signers: Vec<AccountId>, threshold: u32) {
     ctx(who, NearToken::from_near(1));
-    let _ = f.create_treasury(name.into(), signers, threshold, "Acme Coffee".into());
+    let _ = f.create_treasury(name.into(), signers, threshold, "Acme Coffee".into(), Some("acme.near".into()));
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn names_are_unique() {
 fn requires_the_minimum_deposit() {
     let mut f = setup();
     ctx(alice(), NearToken::from_millinear(499));
-    let _ = f.create_treasury("acme".into(), vec![alice()], 1, "Acme".into());
+    let _ = f.create_treasury("acme".into(), vec![alice()], 1, "Acme".into(), None);
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn rejects_bad_names() {
 fn requires_a_display_name() {
     let mut f = setup();
     ctx(alice(), NearToken::from_near(1));
-    let _ = f.create_treasury("acme".into(), vec![alice()], 1, "   ".into());
+    let _ = f.create_treasury("acme".into(), vec![alice()], 1, "   ".into(), None);
 }
 
 #[test]
@@ -214,4 +214,49 @@ fn owner_can_update_config() {
     let c = f.get_config();
     assert_eq!(c.default_proposer, bob());
     assert_eq!(c.owner, alice());
+}
+
+#[test]
+fn payout_accounts() {
+    for ok in ["acme.near", "shop.acme.near", &"a".repeat(64), &"0123456789abcdef".repeat(4)] {
+        assert!(valid_payout_account(ok), "{ok}");
+    }
+    for bad in ["acme.testnet", "acme", "ACME.near", ".near", &"g".repeat(64), "0x5Ce7a697d2710275e14179E8D62C816628737A6b"] {
+        assert!(!valid_payout_account(bad), "{bad}");
+    }
+}
+
+fn active_acme() -> Factory {
+    let mut f = setup();
+    create(&mut f, alice(), "acme", vec![alice(), bob()], 2);
+    callback(PromiseResult::Successful(vec![]));
+    f.on_treasury_created(acme(), alice(), NearToken::from_near(1));
+    f
+}
+
+#[test]
+fn creator_sets_the_payout_account() {
+    let mut f = active_acme();
+    assert_eq!(f.get_shop(acme()).unwrap().payout_account.as_deref(), Some("acme.near"));
+    ctx(alice(), NearToken::from_near(0));
+    f.set_payout_account(acme(), Some("acme-coffee.near".into()));
+    assert_eq!(f.get_shop(acme()).unwrap().payout_account.as_deref(), Some("acme-coffee.near"));
+    f.set_payout_account(acme(), None);
+    assert_eq!(f.get_shop(acme()).unwrap().payout_account, None);
+}
+
+#[test]
+#[should_panic(expected = "only the shop's creator")]
+fn a_co_signer_cannot_redirect_revenue() {
+    let mut f = active_acme();
+    ctx(bob(), NearToken::from_near(0));
+    f.set_payout_account(acme(), Some("bob.near".into()));
+}
+
+#[test]
+#[should_panic(expected = "payout account must be a mainnet")]
+fn payout_account_must_be_mainnet() {
+    let mut f = setup();
+    ctx(alice(), NearToken::from_near(1));
+    let _ = f.create_treasury("acme".into(), vec![alice()], 1, "Acme".into(), Some("acme.testnet".into()));
 }

@@ -20,6 +20,8 @@ export interface Shop {
   proposer: string;
   created_at_ms: number;
   status: "Creating" | "Active";
+  /** Mainnet account checkout pays (Intents settles on mainnet only). */
+  payout_account: string | null;
 }
 
 export interface FactoryConfig {
@@ -92,15 +94,42 @@ export async function createShop(p: {
   signers: string[];
   threshold: number;
   depositNear: number;
+  payoutAccount: string | null;
 }): Promise<unknown> {
   const deposit = (BigInt(Math.round(p.depositNear * 1000)) * ONE_NEAR) / 1000n;
   return callContractOn(
     FACTORY_CONTRACT_ID,
     "create_treasury",
-    { name: p.name, signers: p.signers, threshold: p.threshold, display_name: p.displayName },
+    {
+      name: p.name,
+      signers: p.signers,
+      threshold: p.threshold,
+      display_name: p.displayName,
+      payout_account: p.payoutAccount,
+    },
     deposit.toString(),
     CREATE_GAS,
   );
+}
+
+/** A mainnet account checkout can pay: a named `.near` account or a 64-hex implicit one. */
+export function validPayoutAccount(id: string): boolean {
+  if (/^[0-9a-f]{64}$/.test(id)) return true;
+  return /^(([a-z\d]+[-_])*[a-z\d]+\.)+near$/.test(id) && id.length <= 64;
+}
+
+/** Creator only (enforced by the factory). */
+export async function setPayoutAccount(treasury: string, payoutAccount: string | null): Promise<unknown> {
+  return callContractOn(FACTORY_CONTRACT_ID, "set_payout_account", {
+    treasury,
+    payout_account: payoutAccount,
+  });
+}
+
+/** Shareable checkout link for a shop. */
+export function checkoutLink(treasury: string): string {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return `${origin}/checkout/order?shop=${encodeURIComponent(treasury)}`;
 }
 
 // ---- starting configuration ------------------------------------------------------

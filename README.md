@@ -45,7 +45,8 @@ the AI a small, capped amount of autonomy. That design is the main idea of the p
 
 `/onboard` creates a shop's own treasury in one transaction through a factory contract
 (`<shop>.<factory>`), then applies spending limits, regular vendors and the AI model key as
-governance proposals. Code and tests are in the repo; the factory is not deployed yet. See
+governance proposals. Each shop gets its own checkout link that pays the shop's mainnet payout
+account. Code and tests are in the repo; the factory is not deployed yet. See
 [`docs/FACTORY.md`](docs/FACTORY.md).
 
 ### For agent builders
@@ -180,7 +181,7 @@ anyone: execute_auto after the veto window
 - `web`: Next.js app: treasury (on-chain proof, autonomy budget, veto/execute, "Needs you"),
   invoices (submit, sell, buy, propose payment), dashboard, checkout and flows. Read-only without
   a wallet; actions are signed with a NEAR wallet.
-- `contracts/factory`: creates a treasury per merchant from a global contract (by code hash). 15 unit tests.
+- `contracts/factory`: creates a treasury per merchant from a global contract (by code hash), with a mainnet payout account for checkout. 19 unit tests.
 - Docs: [`CONTRACT.md`](docs/CONTRACT.md), [`ATTESTATION.md`](docs/ATTESTATION.md), [`FACTORY.md`](docs/FACTORY.md), [`PLAN.md`](docs/PLAN.md).
 
 ## Limits (honest about what this does not do)

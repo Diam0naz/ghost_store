@@ -1,7 +1,7 @@
 # Merchant onboarding: the factory
 
 `contracts/factory` lets any merchant create their own treasury in one transaction from
-`/onboard`. Status: code and 15 unit tests in this repo; **not deployed yet**.
+`/onboard`. Status: code and 19 unit tests in this repo; **not deployed yet**.
 
 ## How it works
 
@@ -14,7 +14,13 @@
    `SetPolicy`, `SetModelSigner` (copied from the demo treasury, where signers registered it after
    checking its TDX attestation), `SetVendor` for each regular vendor and `SetAutonomy` (a preset).
    With threshold 1 it takes effect at once; otherwise co-signers approve on the Treasury page.
-3. **Use.** The app shows the selected shop (`?shop=<treasury>`, remembered per browser). Only the
+3. **Get paid.** Each shop can record a **mainnet** payout account (`acme.near`, or a 64-hex
+   implicit account). Checkout settles on mainnet through NEAR Intents, so it cannot pay a testnet
+   treasury; `/checkout/<order>?shop=<treasury>` pays that shop's payout account inside the Intents
+   ledger (the account needs no NEAR or storage deposit). Without one, the shop's checkout refuses
+   payment. Only the shop's creator can change it (`set_payout_account`), so a single co-signer
+   cannot redirect revenue; every change is logged on chain.
+4. **Use.** The app shows the selected shop (`?shop=<treasury>`, remembered per browser). Only the
    demo treasury or `<name>.<factory>` accounts can be selected, so a crafted link cannot point a
    signer's wallet at another contract.
 
@@ -64,8 +70,10 @@ in its callback, possibly before the failed batch's funds have come back to it.
   that keeps them private (encrypted in the browser, decrypted only inside private inference).
 - **The agent per shop.** `propose`, `execute-auto` and `keeper` take one `TREASURY_CONTRACT_ID`;
   serving many shops means iterating `list_shops` with each shop's books.
-- **Checkout per shop.** Checkout pays the configured merchant; per-shop payout accounts come with
-  the mainnet treasury.
+- **Revenue into the shop's treasury.** Checkout pays the shop's mainnet payout account, not its
+  testnet treasury; `npm run sweep` moves revenue into a treasury once shops run on mainnet.
+- **Payout changes by governance.** Changing the payout account is creator-only; signer approval
+  for it needs a treasury proposal kind that calls the factory.
 - **Attestation API.** `/api/attestation/[id]` reads the default treasury only.
 - **Discovery.** `shops_signed_by` scans the directory; fine for thousands of shops, an indexer
   beyond that.
